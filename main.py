@@ -2,10 +2,12 @@
 Pipeline auto tạo video TikTok - chạy toàn bộ từ đầu đến cuối.
 
 Cách dùng:
-    python main.py "chủ đề video" [--background physics|slideshow] [--voice <edge-tts voice>]
-                                   [--lang vi|en|...] [--rate +20%]
+    python main.py ["chủ đề video"] [--background physics|slideshow] [--voice <edge-tts voice>]
+                                     [--lang vi|en|...] [--rate +20%]
 
     Không truyền --background/--voice/--lang/--rate thì dùng mặc định trong config.py.
+    Không truyền chủ đề thì AI (Groq) tự nghĩ 1 chủ đề mới, tránh lặp lại các chủ đề gần đây
+    (lưu trong topic_history.txt).
 
 Yêu cầu: đã cài dependencies (pip install -r requirements.txt),
 đã set biến môi trường GROQ_API_KEY và PEXELS_API_KEY (xem .env.example).
@@ -19,12 +21,13 @@ from datetime import datetime
 from typing import Optional
 
 from config import OUTPUT_DIR, MUSIC_DIR, NUM_IMAGES, VIDEO_STYLE, DEFAULT_LANG, DEFAULT_VOICES, TTS_VOICE, TTS_RATE
-from script_gen import generate_script
+from script_gen import generate_script, generate_topic
 from tts import generate_voice
 from images import fetch_image
 from video_builder import build_scene_clip, build_scene_clip_physics, concat_clips
 from deliver import send_to_telegram
 from tiktok_poster import post_video_draft
+from topic_history import load_recent_topics, append_topic
 
 
 def _sanitize_filename(name: str) -> str:
@@ -35,13 +38,19 @@ def _sanitize_filename(name: str) -> str:
 
 
 def run_pipeline(
-    topic: str,
+    topic: Optional[str] = None,
     background: str = VIDEO_STYLE,
     voice: Optional[str] = None,
     lang: str = DEFAULT_LANG,
     rate: str = TTS_RATE,
 ) -> Path:
     resolved_voice = voice or DEFAULT_VOICES.get(lang, TTS_VOICE)
+
+    if not topic:
+        recent_topics = load_recent_topics()
+        topic = generate_topic(lang=lang, recent_topics=recent_topics)
+        print(f"[0/4] Không truyền chủ đề — AI tự nghĩ: {topic}")
+    append_topic(topic)
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     work_dir = OUTPUT_DIR / run_id
@@ -112,8 +121,9 @@ def run_pipeline(
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Pipeline auto tạo video TikTok")
     parser.add_argument(
-        "topic", nargs="?", default="3 mẹo tiết kiệm tiền mỗi tháng",
-        help="Chủ đề video (mặc định: %(default)r)",
+        "topic", nargs="?", default=None,
+        help="Chủ đề video. Bỏ trống → AI (Groq) tự nghĩ chủ đề mới, tránh lặp lại "
+             "các chủ đề gần đây (xem topic_history.txt)",
     )
     parser.add_argument(
         "--background", "-b", choices=["physics", "slideshow"], default=VIDEO_STYLE,

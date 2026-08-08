@@ -8,7 +8,7 @@ on:
     # Cho phép chạy tay từ tab Actions trên GitHub, tùy chỉnh mọi tham số của main.py
     inputs:
       topic:
-        description: "Chủ đề video (để trống = mặc định trong main.py)"
+        description: "Chủ đề video (để trống = AI tự nghĩ chủ đề mới, tránh lặp lại chủ đề gần đây)"
         required: false
         default: ""
       background:
@@ -34,6 +34,8 @@ jobs:
   generate-video:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write  # cần để commit lại topic_history.txt sau mỗi lần chạy
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,6 +72,23 @@ jobs:
             python main.py "$TOPIC" "${ARGS[@]}"
           else
             python main.py "${ARGS[@]}"
+          fi
+
+      - name: Lưu lại lịch sử chủ đề (tránh AI lặp lại chủ đề ở lần chạy sau)
+        # topic_history.py ghi topic_history.txt cục bộ trong runner — commit lại vào repo để lịch
+        # sử không mất giữa các lần chạy CI (mỗi lần chạy là 1 checkout mới, không tự nhớ gì cả).
+        # Dùng "git add" rồi kiểm tra staged diff (thay vì git diff thường) vì lần chạy ĐẦU TIÊN
+        # topic_history.txt là file mới hoàn toàn (chưa track) — git diff thường bỏ sót file mới.
+        if: always()
+        run: |
+          if [ -f topic_history.txt ]; then
+            git add topic_history.txt
+            if ! git diff --cached --quiet -- topic_history.txt; then
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git commit -m "chore: cập nhật lịch sử chủ đề"
+              git push
+            fi
           fi
 
       - name: Cảnh báo nếu TikTok cấp refresh_token mới

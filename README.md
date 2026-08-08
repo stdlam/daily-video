@@ -5,7 +5,8 @@ Tự động tạo video TikTok (ảnh hoặc nền physics + giọng đọc + p
 ## Pipeline
 
 ```
-Chủ đề → Groq API (free) → script (title + lời thoại từng cảnh)
+Chủ đề (tự truyền, hoặc để trống cho AI tự nghĩ, tránh lặp lại — xem topic_history.txt)
+       → Groq API (free) → script (title + lời thoại từng cảnh)
        → edge-tts (free) → giọng đọc từng cảnh (kèm timing từng từ)
        → physics_bg.py hoặc Pexels → nền bóng nảy tự sinh / ảnh Ken Burns
        → FFmpeg → phụ đề karaoke (từ đang đọc tô nổi bật) + ghép + nhạc nền
@@ -84,7 +85,9 @@ Muốn chạy tay ngay lập tức: vào tab **Actions** trên GitHub → chọn
 | Màu chữ highlight karaoke | `caption.py` → `HIGHLIGHT_COLOR` |
 | Số cảnh/video | `config.py` → `NUM_IMAGES` |
 | Số bóng, màu sắc, độ nảy | `physics_bg.py` → `PALETTE`, `num_balls`, `gravity`/`damping` trong `_step_and_draw` |
-| Chủ đề cố định hoặc random theo list | `main.py`, hoặc sửa `workflow_dispatch.inputs.topic` trong yml |
+| Chủ đề cụ thể (thay vì để AI tự nghĩ) | Truyền trực tiếp: `python main.py "chủ đề"`, hoặc nhập vào ô `topic` khi **Run workflow** trên GitHub |
+| Cách AI chọn chủ đề tự động / lĩnh vực gợi ý | `script_gen.py` → `generate_topic()` |
+| Số lượng chủ đề gần đây AI tránh lặp lại | `topic_history.py` → `MAX_HISTORY` |
 | Nhạc nền | Bỏ file `.mp3` vào `assets/music/` |
 | Lịch chạy | `.github/workflows/daily-video.yml` → dòng `cron` |
 

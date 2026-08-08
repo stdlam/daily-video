@@ -101,6 +101,55 @@ Trả về đúng format JSON sau, không thêm gì khác:
     return json.loads(content)
 
 
+def generate_topic(lang: str = DEFAULT_LANG, recent_topics: list | None = None) -> str:
+    """Nhờ LLM nghĩ ra 1 chủ đề video TikTok mới, dùng khi chạy tự động (vd. GitHub Actions theo
+    lịch) không có ai truyền sẵn chủ đề. `recent_topics` là các chủ đề đã dùng gần đây để tránh
+    lặp lại/na ná."""
+    if not GROQ_API_KEY:
+        raise RuntimeError("Thiếu GROQ_API_KEY. Xem file .env.example")
+
+    lang_name = _LANG_NAMES.get(lang, lang)
+    avoid = ""
+    if recent_topics:
+        joined = "; ".join(recent_topics[-15:])
+        avoid = f"\nTRÁNH các chủ đề đã dùng gần đây (không lặp lại, không na ná): {joined}"
+
+    system_prompt = (
+        f"Bạn là chuyên gia sáng tạo nội dung TikTok, giỏi nghĩ ra chủ đề video ngắn hấp dẫn bằng "
+        f"{lang_name}. Luôn trả lời CHỈ bằng JSON hợp lệ, không thêm text nào khác, không markdown."
+    )
+    user_prompt = f"""
+Nghĩ ra 1 chủ đề video TikTok MỚI, ngắn gọn (dưới 12 từ), thuộc một lĩnh vực bất kỳ trong: tài
+chính cá nhân, sức khỏe, tâm lý học, năng suất làm việc, sự thật thú vị, mẹo vặt cuộc sống, phát
+triển bản thân, khoa học đời thường, các mối quan hệ. Chủ đề phải cụ thể, gây tò mò, không chung
+chung, không phải chủ đề đã quá phổ biến/nhàm.
+{avoid}
+
+Trả về đúng format JSON sau, không thêm gì khác:
+{{"topic": "..."}}
+"""
+    resp = requests.post(
+        GROQ_URL,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": GROQ_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 1.1,
+            "response_format": {"type": "json_object"},
+        },
+        timeout=60,
+    )
+    resp.raise_for_status()
+    content = resp.json()["choices"][0]["message"]["content"]
+    return json.loads(content)["topic"]
+
+
 if __name__ == "__main__":
     import sys
     topic = sys.argv[1] if len(sys.argv) > 1 else "3 mẹo tiết kiệm tiền mỗi tháng"
