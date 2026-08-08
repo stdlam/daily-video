@@ -21,6 +21,7 @@ def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG) -
     Trả về dict dạng:
     {
         "title": "...",
+        "hashtags": ["#...", "#...", ...],
         "scenes": [
             {"narration": "...", "image_query": "..."},
             ...
@@ -28,6 +29,7 @@ def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG) -
     }
     - narration: câu thoại sẽ đọc (TTS)
     - image_query: từ khóa tiếng Anh để search ảnh minh họa (Pexels cần query tiếng Anh)
+    - hashtags: dùng làm caption khi đăng TikTok (xem tiktok_poster.post_video_draft)
     """
     if not GROQ_API_KEY:
         raise RuntimeError("Thiếu GROQ_API_KEY. Xem file .env.example")
@@ -70,9 +72,16 @@ FORMAT MỖI CẢNH:
 - "image_query": từ khóa TIẾNG ANH mô tả hình ảnh minh họa phù hợp (để search stock photo), luôn viết bằng
   tiếng Anh bất kể narration dùng ngôn ngữ gì
 
+HASHTAGS (dùng làm caption khi đăng TikTok, giúp tăng khả năng viral):
+- "hashtags": mảng 6-10 hashtag, mỗi hashtag là 1 chuỗi bắt đầu bằng "#", KHÔNG chứa dấu cách bên
+  trong (viết liền không dấu cách, có thể giữ dấu tiếng Việt)
+- Kết hợp 2-3 hashtag phổ biến tăng viral (vd: #fyp #xuhuong #foryoupage) với các hashtag cụ thể
+  bám sát chủ đề và nội dung video (không hashtag chung chung, vô nghĩa)
+
 Trả về đúng format JSON sau, không thêm gì khác:
 {{
   "title": "tiêu đề ngắn cho video",
+  "hashtags": ["#...", "#..."],
   "scenes": [
     {{"narration": "...", "image_query": "..."}}
   ]

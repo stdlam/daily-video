@@ -9,14 +9,24 @@ from config import VIDEO_WIDTH, VIDEO_HEIGHT, FPS, MUSIC_DIR
 from caption import wrap_words, draw_caption_at
 
 _FONT_CANDIDATES = [
-    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",  # macOS
+    "/System/Library/Fonts/Supplemental/Arial.ttf",  # macOS
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux (GitHub Actions runner)
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux (GitHub Actions runner)
 ]
 
 def _find_font():
     for path in _FONT_CANDIDATES:
         if Path(path).exists():
             return path
+    # Không có font nào trong danh sách -> caption.draw_caption_at sẽ âm thầm rơi về
+    # ImageFont.load_default() của PIL, vốn render cỡ chữ CỐ ĐỊNH ~8px bất kể font_size truyền
+    # vào -> chữ phụ đề nhỏ tí không đọc được. Cảnh báo ngay để không mất công debug lại lần nữa.
+    print(
+        "[video_builder] CẢNH BÁO: không tìm thấy font nào trong _FONT_CANDIDATES — phụ đề sẽ "
+        "render bằng font mặc định rất nhỏ của PIL. Cài thêm font TTF và thêm đường dẫn vào "
+        "_FONT_CANDIDATES."
+    )
     return None
 
 _FONT_PATH = _find_font()

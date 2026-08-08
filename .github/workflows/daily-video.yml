@@ -45,8 +45,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Cài ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Cài ffmpeg + font (DejaVu Sans, hỗ trợ tiếng Việt có dấu)
+        # Thiếu font TTF trên runner Ubuntu khiến PIL âm thầm rơi về font mặc định cỡ ~8px cố định
+        # -> phụ đề render nhỏ tí không đọc được (khác hẳn khi chạy local trên Mac, nơi có sẵn
+        # Arial). Xem _FONT_CANDIDATES trong video_builder.py.
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
 
       - name: Cài Python dependencies
         run: pip install -r requirements.txt

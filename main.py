@@ -62,6 +62,7 @@ def run_pipeline(
     )
     script = generate_script(topic, num_scenes=NUM_IMAGES, lang=lang)
     title = script["title"]
+    hashtags = script.get("hashtags", [])
     scenes = script["scenes"]
     print(f"  → Tiêu đề: {title} ({len(scenes)} cảnh)")
 
@@ -101,8 +102,9 @@ def run_pipeline(
     print(f"[4/4] Hoàn tất: {final_path}")
 
     print("Đang đăng video lên TikTok (chế độ riêng tư, nếu đã cấu hình)...")
+    tiktok_caption = f"{title}\n\n{' '.join(hashtags)}" if hashtags else title
     try:
-        tiktok_result = post_video_draft(final_path, caption=title)
+        tiktok_result = post_video_draft(final_path, caption=tiktok_caption)
         if tiktok_result:
             print(
                 "  → Đã đăng lên TikTok (riêng tư). Muốn video này public: mở app TikTok, "
