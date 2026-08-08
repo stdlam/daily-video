@@ -1,0 +1,94 @@
+name: Auto Tạo Video TikTok
+
+on:
+  schedule:
+    # Chạy 9h sáng giờ VN mỗi ngày (2h UTC = 9h VN, UTC+7)
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    # Cho phép chạy tay từ tab Actions trên GitHub, tùy chỉnh mọi tham số của main.py
+    inputs:
+      topic:
+        description: "Chủ đề video (để trống = mặc định trong main.py)"
+        required: false
+        default: ""
+      background:
+        description: "Kiểu nền video"
+        required: false
+        type: choice
+        options: ["", "physics", "slideshow"]
+        default: ""
+      voice:
+        description: "Giọng đọc edge-tts (vd: vi-VN-NamMinhNeural, để trống = tự chọn theo lang)"
+        required: false
+        default: ""
+      lang:
+        description: "Ngôn ngữ kịch bản/giọng đọc (vi, en, ja, ko, zh, fr, es...)"
+        required: false
+        default: ""
+      rate:
+        description: "Tốc độ đọc (vd: +20%, +0%, -10%)"
+        required: false
+        default: ""
+
+jobs:
+  generate-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cài ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Cài Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Chạy pipeline tạo video
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
+        run: |
+          ARGS=()
+          [ -n "${{ github.event.inputs.background }}" ] && ARGS+=(--background "${{ github.event.inputs.background }}")
+          [ -n "${{ github.event.inputs.voice }}" ] && ARGS+=(--voice "${{ github.event.inputs.voice }}")
+          [ -n "${{ github.event.inputs.lang }}" ] && ARGS+=(--lang "${{ github.event.inputs.lang }}")
+          [ -n "${{ github.event.inputs.rate }}" ] && ARGS+=(--rate "${{ github.event.inputs.rate }}")
+
+          TOPIC="${{ github.event.inputs.topic }}"
+          if [ -n "$TOPIC" ]; then
+            python main.py "$TOPIC" "${ARGS[@]}"
+          else
+            python main.py "${ARGS[@]}"
+          fi
+
+      - name: Cảnh báo nếu TikTok cấp refresh_token mới
+        # tiktok_poster.py có thể rotate refresh_token và ghi vào .env cục bộ (env_utils.py), nhưng
+        # .env trong runner CI là tạm thời và biến mất sau khi job kết thúc — secret trên GitHub
+        # KHÔNG tự cập nhật được (GITHUB_TOKEN mặc định không có quyền ghi secret). Bước này chỉ
+        # cảnh báo (không in giá trị token ra log để tránh lộ secret) để biết đường cập nhật tay.
+        if: always()
+        run: |
+          if [ -f .env ] && grep -q '^TIKTOK_REFRESH_TOKEN=' .env; then
+            NEW_TOKEN=$(grep '^TIKTOK_REFRESH_TOKEN=' .env | cut -d'=' -f2-)
+            if [ -n "$NEW_TOKEN" ] && [ "$NEW_TOKEN" != "${{ secrets.TIKTOK_REFRESH_TOKEN }}" ]; then
+              echo "::warning::TikTok đã cấp refresh_token MỚI, khác với secret TIKTOK_REFRESH_TOKEN hiện tại. Secret chưa được tự động cập nhật. Nếu lần chạy tới báo lỗi đăng TikTok, hãy chạy lại 'python tiktok_auth.py' ở máy local rồi cập nhật secret TIKTOK_REFRESH_TOKEN trên GitHub (Settings > Secrets and variables > Actions)."
+            fi
+          fi
+
+      - name: Upload video làm artifact (backup nếu Telegram/TikTok lỗi)
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ github.run_id }}
+          path: output/*.mp4
+          retention-days: 7

@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+venv/
+.DS_Store
+
+# File sinh ra khi chạy pipeline (video, audio, ảnh tạm, work-dir từng lần chạy) — không track
+output/*
+!output/.gitkeep
