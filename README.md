@@ -66,11 +66,15 @@ git push -u origin main
 
 Vào repo trên GitHub → **Settings → Secrets and variables → Actions** → thêm các secret:
 - `GROQ_API_KEY`
-- `PEXELS_API_KEY` (nếu dùng `--background slideshow`)
+- `PEXELS_API_KEY` — **bắt buộc để chạy trên GitHub Actions**: workflow mặc định chạy
+  `--background slideshow` (khác mặc định `physics` khi chạy local), cần key này để lấy ảnh
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` (nếu dùng)
 - `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` / `TIKTOK_REFRESH_TOKEN` (nếu dùng auto-đăng TikTok)
 
-Workflow `.github/workflows/daily-video.yml` sẽ tự chạy **mỗi ngày lúc 9h sáng giờ VN**. Có thể đổi lịch bằng cách sửa dòng `cron` trong file đó.
+Workflow `.github/workflows/daily-video.yml` sẽ tự chạy **mỗi ngày lúc 9h sáng giờ VN**, mặc định
+`--background slideshow --lang en` (khác mặc định `physics`/`vi` khi chạy local trong `config.py`)
+— đổi được qua input khi **Run workflow** thủ công, hoặc sửa thẳng trong file yml nếu muốn đổi
+mặc định của lịch chạy tự động. Có thể đổi lịch bằng cách sửa dòng `cron` trong file đó.
 
 Muốn chạy tay ngay lập tức: vào tab **Actions** trên GitHub → chọn workflow "Auto Tạo Video TikTok" → **Run workflow** → có thể tùy chỉnh chủ đề, nền, giọng, ngôn ngữ, tốc độ đọc.
 

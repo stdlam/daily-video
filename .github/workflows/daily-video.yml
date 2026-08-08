@@ -12,7 +12,7 @@ on:
         required: false
         default: ""
       background:
-        description: "Kiểu nền video"
+        description: "Kiểu nền video (để trống = slideshow, mặc định khi chạy trên GitHub Actions)"
         required: false
         type: choice
         options: ["", "physics", "slideshow"]
@@ -22,7 +22,7 @@ on:
         required: false
         default: ""
       lang:
-        description: "Ngôn ngữ kịch bản/giọng đọc (vi, en, ja, ko, zh, fr, es...)"
+        description: "Ngôn ngữ kịch bản/giọng đọc (để trống = en, mặc định khi chạy trên GitHub Actions)"
         required: false
         default: ""
       rate:
@@ -61,10 +61,14 @@ jobs:
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
           TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
         run: |
-          ARGS=()
-          [ -n "${{ github.event.inputs.background }}" ] && ARGS+=(--background "${{ github.event.inputs.background }}")
+          # Trên GitHub Actions (chạy theo lịch cron LẪN chạy tay để trống input): mặc định
+          # background=slideshow, lang=en — khác mặc định physics/vi khi chạy local (config.py).
+          # Không dùng tên biến "LANG" vì trùng biến môi trường locale hệ thống, có thể ảnh hưởng
+          # lệnh khác trong cùng step.
+          BACKGROUND="${{ github.event.inputs.background }}"
+          VIDEO_LANG="${{ github.event.inputs.lang }}"
+          ARGS=(--background "${BACKGROUND:-slideshow}" --lang "${VIDEO_LANG:-en}")
           [ -n "${{ github.event.inputs.voice }}" ] && ARGS+=(--voice "${{ github.event.inputs.voice }}")
-          [ -n "${{ github.event.inputs.lang }}" ] && ARGS+=(--lang "${{ github.event.inputs.lang }}")
           [ -n "${{ github.event.inputs.rate }}" ] && ARGS+=(--rate "${{ github.event.inputs.rate }}")
 
           TOPIC="${{ github.event.inputs.topic }}"
