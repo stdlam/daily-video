@@ -3,7 +3,8 @@ name: Auto Tạo Video TikTok
 on:
   schedule:
     # Chạy 10h20 sáng giờ VN mỗi ngày
-    - cron: "20 3 * * *"
+    - cron: "30 10 * * *"
+      timezone: "Asia/Ho_Chi_Minh"
   workflow_dispatch:
     # Cho phép chạy tay từ tab Actions trên GitHub, tùy chỉnh mọi tham số của main.py
     inputs:
