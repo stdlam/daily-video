@@ -45,6 +45,11 @@ def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG) -
     user_prompt = f"""
 Viết kịch bản video TikTok về chủ đề: "{topic}"
 
+NGÔN NGỮ (bắt buộc, áp dụng cho TẤT CẢ nội dung trả về): title, hashtags, và narration của mọi
+cảnh PHẢI viết bằng {lang_name} — kể cả khi ví dụ/mô tả field bên dưới đây đang viết bằng tiếng
+Việt (đó chỉ là hướng dẫn cho bạn, không phải ngôn ngữ cần trả về). Không lẫn ngôn ngữ khác vào
+bất kỳ field nào dù chỉ một phần.
+
 YÊU CẦU VỀ CHIỀU SÂU NỘI DUNG (quan trọng nhất):
 - Mỗi cảnh nội dung (trừ cảnh hook mở đầu và cảnh CTA kết thúc) PHẢI chứa ít nhất MỘT trong các yếu tố sau:
   con số/tỷ lệ % cụ thể, ví dụ/tình huống thực tế, cơ chế hoặc lý do "tại sao nó xảy ra" (tâm lý, sinh học,
@@ -73,14 +78,16 @@ FORMAT MỖI CẢNH:
   tiếng Anh bất kể narration dùng ngôn ngữ gì
 
 HASHTAGS (dùng làm caption khi đăng TikTok, giúp tăng khả năng viral):
-- "hashtags": mảng 6-10 hashtag, mỗi hashtag là 1 chuỗi bắt đầu bằng "#", KHÔNG chứa dấu cách bên
-  trong (viết liền không dấu cách, có thể giữ dấu tiếng Việt)
-- Kết hợp 2-3 hashtag phổ biến tăng viral (vd: #fyp #xuhuong #foryoupage) với các hashtag cụ thể
-  bám sát chủ đề và nội dung video (không hashtag chung chung, vô nghĩa)
+- "hashtags": mảng 6-10 hashtag bằng {lang_name}, mỗi hashtag là 1 chuỗi bắt đầu bằng "#", KHÔNG
+  chứa dấu cách bên trong (viết liền không dấu cách)
+- Kết hợp 2-3 hashtag phổ biến tăng viral bằng {lang_name} (vd: #fyp #foryoupage #viral nếu tiếng
+  Anh, #fyp #xuhuong nếu tiếng Việt — chọn dạng đúng ngôn ngữ đang yêu cầu) với các hashtag cụ thể
+  bằng {lang_name} bám sát chủ đề và nội dung video (không hashtag chung chung, vô nghĩa)
 
-Trả về đúng format JSON sau, không thêm gì khác:
+Trả về đúng format JSON sau, không thêm gì khác (title/hashtags/narration bằng {lang_name} như đã
+yêu cầu ở trên):
 {{
-  "title": "tiêu đề ngắn cho video",
+  "title": "<video title in {lang_name}>",
   "hashtags": ["#...", "#..."],
   "scenes": [
     {{"narration": "...", "image_query": "..."}}
@@ -132,10 +139,12 @@ Nghĩ ra 1 chủ đề video TikTok MỚI, ngắn gọn (dưới 12 từ), thu�
 chính cá nhân, sức khỏe, tâm lý học, năng suất làm việc, sự thật thú vị, mẹo vặt cuộc sống, phát
 triển bản thân, khoa học đời thường, các mối quan hệ. Chủ đề phải cụ thể, gây tò mò, không chung
 chung, không phải chủ đề đã quá phổ biến/nhàm.
+
+NGÔN NGỮ (bắt buộc): "topic" PHẢI viết bằng {lang_name}, không lẫn ngôn ngữ khác dù chỉ một phần.
 {avoid}
 
 Trả về đúng format JSON sau, không thêm gì khác:
-{{"topic": "..."}}
+{{"topic": "<topic in {lang_name}>"}}
 """
     resp = requests.post(
         GROQ_URL,
