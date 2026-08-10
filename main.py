@@ -43,6 +43,7 @@ def run_pipeline(
     voice: Optional[str] = None,
     lang: str = DEFAULT_LANG,
     rate: str = TTS_RATE,
+    post_to_tiktok: bool = True,
 ) -> Path:
     resolved_voice = voice or DEFAULT_VOICES.get(lang, TTS_VOICE)
 
@@ -101,20 +102,23 @@ def run_pipeline(
 
     print(f"[4/4] Hoàn tất: {final_path}")
 
-    print("Đang đăng video lên TikTok (chế độ riêng tư, nếu đã cấu hình)...")
     tiktok_caption = f"{title}\n\n{' '.join(hashtags)}" if hashtags else title
     tiktok_posted = False
-    try:
-        tiktok_result = post_video_draft(final_path, caption=tiktok_caption)
-        if tiktok_result:
-            tiktok_posted = True
-            print(
-                "  → Đã đăng lên TikTok (riêng tư). Muốn video này public: mở app TikTok, "
-                "tắt Private account CHO TÀI KHOẢN, rồi vào chính video này đổi privacy riêng "
-                "thành \"Everyone\" (cần cả 2 bước, đã test thực tế)."
-            )
-    except Exception as e:
-        print(f"  (Đăng TikTok thất bại, video vẫn được lưu tại {final_path}: {e})")
+    if post_to_tiktok:
+        print("Đang đăng video lên TikTok (chế độ riêng tư, nếu đã cấu hình)...")
+        try:
+            tiktok_result = post_video_draft(final_path, caption=tiktok_caption)
+            if tiktok_result:
+                tiktok_posted = True
+                print(
+                    "  → Đã đăng lên TikTok (riêng tư). Muốn video này public: mở app TikTok, "
+                    "tắt Private account CHO TÀI KHOẢN, rồi vào chính video này đổi privacy riêng "
+                    "thành \"Everyone\" (cần cả 2 bước, đã test thực tế)."
+                )
+        except Exception as e:
+            print(f"  (Đăng TikTok thất bại, video vẫn được lưu tại {final_path}: {e})")
+    else:
+        print("Bỏ qua đăng TikTok (--no-tiktok).")
 
     if not tiktok_posted:
         # Chưa đăng được (chưa cấu hình hoặc lỗi) -> lưu caption + hashtag ra file cạnh video để
@@ -154,9 +158,16 @@ def _parse_args() -> argparse.Namespace:
         # vào, vd. "+20%") đều phải escape thành %% để không lỗi "incomplete format"
         help=f"Tốc độ đọc, vd: +20%%, +0%%, -10%% (video sẽ theo tốc độ này). Mặc định: {TTS_RATE.replace('%', '%%')}",
     )
+    parser.add_argument(
+        "--no-tiktok", action="store_true",
+        help="Bỏ qua đăng TikTok cho lần chạy này (vẫn lưu caption+hashtag ra file .txt cạnh video)",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = _parse_args()
-    run_pipeline(args.topic, background=args.background, voice=args.voice, lang=args.lang, rate=args.rate)
+    run_pipeline(
+        args.topic, background=args.background, voice=args.voice, lang=args.lang, rate=args.rate,
+        post_to_tiktok=not args.no_tiktok,
+    )
