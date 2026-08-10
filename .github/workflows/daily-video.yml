@@ -114,8 +114,12 @@ jobs:
           fi
 
       - name: Upload video làm artifact (backup nếu Telegram/TikTok lỗi)
+        # main.py chỉ ghi file .txt (caption + hashtag) khi auto-đăng TikTok KHÔNG thành công
+        # (chưa cấu hình hoặc lỗi API) — kèm theo video trong artifact để đăng tay dễ copy-paste.
         uses: actions/upload-artifact@v4
         with:
           name: video-${{ github.run_id }}
-          path: output/*.mp4
+          path: |
+            output/*.mp4
+            output/*.txt
           retention-days: 7

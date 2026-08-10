@@ -103,9 +103,11 @@ def run_pipeline(
 
     print("Đang đăng video lên TikTok (chế độ riêng tư, nếu đã cấu hình)...")
     tiktok_caption = f"{title}\n\n{' '.join(hashtags)}" if hashtags else title
+    tiktok_posted = False
     try:
         tiktok_result = post_video_draft(final_path, caption=tiktok_caption)
         if tiktok_result:
+            tiktok_posted = True
             print(
                 "  → Đã đăng lên TikTok (riêng tư). Muốn video này public: mở app TikTok, "
                 "tắt Private account CHO TÀI KHOẢN, rồi vào chính video này đổi privacy riêng "
@@ -113,6 +115,13 @@ def run_pipeline(
             )
     except Exception as e:
         print(f"  (Đăng TikTok thất bại, video vẫn được lưu tại {final_path}: {e})")
+
+    if not tiktok_posted:
+        # Chưa đăng được (chưa cấu hình hoặc lỗi) -> lưu caption + hashtag ra file cạnh video để
+        # tự đăng tay. File .txt này cũng được đính kèm cùng video trong artifact trên GitHub Actions.
+        caption_path = final_path.with_suffix(".txt")
+        caption_path.write_text(tiktok_caption, encoding="utf-8")
+        print(f"  → Đã lưu caption + hashtag vào {caption_path} để đăng tay.")
 
     print("Đang gửi video qua Telegram (nếu đã cấu hình)...")
     send_to_telegram(final_path, caption=title)
