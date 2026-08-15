@@ -50,7 +50,7 @@ DEFAULT_VOICES = {
 }
 
 # --- LLM model (Groq free tier) ---
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 # --- Số cảnh mặc định trên mỗi video ---
 NUM_IMAGES = 5
