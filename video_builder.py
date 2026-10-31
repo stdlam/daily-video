@@ -163,7 +163,7 @@ def concat_clips(clip_paths: List[Path], out_path: Path, music_path: Optional[Pa
                 "-i", str(tmp_concat),
                 "-stream_loop", "-1", "-i", str(music_path),
                 "-filter_complex",
-                "[1:a]volume=0.15[music];[0:a][music]amix=inputs=2:duration=first[aout]",
+                "[1:a]volume=0.2[music];[0:a][music]amix=inputs=2:duration=first[aout]",
                 "-map", "0:v", "-map", "[aout]",
                 "-c:v", "copy", "-shortest",
                 str(out_path),

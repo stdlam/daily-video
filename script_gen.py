@@ -84,8 +84,9 @@ bất kỳ field nào dù chỉ một phần.
 
 YÊU CẦU VỀ CHIỀU SÂU NỘI DUNG (quan trọng nhất):
 - Mỗi cảnh nội dung (trừ cảnh hook mở đầu và cảnh CTA kết thúc) PHẢI chứa ít nhất MỘT trong các yếu tố sau:
-  con số/tỷ lệ % cụ thể, ví dụ/tình huống thực tế, cơ chế hoặc lý do "tại sao nó xảy ra" (tâm lý, sinh học,
-  tài chính...), hoặc một bước hành động cụ thể người xem có thể làm ngay.
+  ví dụ/tình huống đời thường cụ thể mà người xem nhận ra chính mình, cơ chế hoặc lý do "tại sao nó xảy ra"
+  (tâm lý, não bộ, hành vi...), hoặc một bước hành động cụ thể người xem có thể làm ngay. Con số KHÔNG bắt
+  buộc — tối đa 1 con số cho cả video, và chỉ lấy từ DANH SÁCH SỐ LIỆU ĐƯỢC PHÉP bên dưới.
 - TUYỆT ĐỐI KHÔNG viết câu chung chung, sáo rỗng, hiển nhiên ai cũng biết mà không giải thích (vd: "hãy tiết
   kiệm tiền", "sức khỏe là quan trọng nhất", "hãy cố gắng mỗi ngày") — nếu nêu lời khuyên thì phải kèm THEO
   CÁCH LÀM hoặc LÝ DO cụ thể ngay trong câu đó.
@@ -93,17 +94,23 @@ YÊU CẦU VỀ CHIỀU SÂU NỘI DUNG (quan trọng nhất):
   hơn là lời khuyên hiển nhiên.
 - Mỗi cảnh nên nói về MỘT ý cụ thể riêng biệt, không lặp lại ý của cảnh khác, không dùng 2 cảnh để nói cùng
   một điều theo cách diễn đạt khác nhau.
-- KHÔNG bịa số liệu, nghiên cứu hay tên tác giả. Chỉ dùng con số/nghiên cứu có thật và bạn chắc chắn
-  (vd: nghiên cứu của Phillippa Lally: trung bình ~66 ngày để một hành vi thành tự động, dao động
-  18-254 ngày; quy tắc 2 phút; "không bỏ lỡ 2 ngày liên tiếp"; 1.01^365 ≈ 37.8). Nếu không chắc về
-  con số, hãy dùng ví dụ/tình huống/cơ chế thay vì con số.
+- CẤM BỊA SỐ LIỆU: không dùng bất kỳ thống kê dạng "X% người...", "nghiên cứu cho thấy...", "sau X phút
+  não bộ...", "chỉ X người trong 100..." NẰM NGOÀI danh sách dưới đây — kể cả các con số lan truyền trên
+  mạng (vd: "92% người bỏ quyết tâm năm mới" là con số KHÔNG được dùng). Không nêu tên nghiên cứu/tác giả
+  nào ngoài danh sách. DANH SÁCH SỐ LIỆU ĐƯỢC PHÉP (dùng đúng như ghi, không phóng đại):
+    * Nghiên cứu của Phillippa Lally (2009): trung bình ~66 ngày để một hành vi thành tự động, dao động
+      18-254 ngày; bỏ lỡ 1 ngày không làm hỏng quá trình hình thành thói quen.
+    * Tốt hơn 1% mỗi ngày: 1.01^365 ≈ 37.8 lần sau 1 năm (đây là phép toán minh họa, không phải nghiên cứu).
+    * Quy tắc 2 phút: bắt đầu thói quen mới bằng phiên bản chỉ mất 2 phút (nguyên tắc, không phải thống kê).
+  Thay vì số liệu, hãy thuyết phục bằng tình huống đời thường, nghịch lý, và cơ chế dễ hiểu.
 - Narration PHẢI viết bằng {lang_name} thuần túy, không chèn xen từ/ký tự của ngôn ngữ khác vào giữa câu
   (trừ tên riêng hoặc thuật ngữ không có bản dịch tự nhiên).
 
 CẤU TRÚC:
 - Đúng {num_scenes} cảnh (scenes)
-- Cảnh 1: hook gây tò mò cụ thể trong 2 giây đầu — một câu hỏi bất ngờ, một con số gây sốc, hoặc một nghịch lý,
-  KHÔNG hook mơ hồ kiểu "bạn có biết..."
+- Cảnh 1: hook trong 2 giây đầu — một nghịch lý hoặc một câu nói thẳng chạm đúng suy nghĩ/nỗi đau của người
+  xem (vd: "Bạn không lười. Bạn chỉ đang chờ có hứng.", "Động lực là thứ tệ nhất để dựa vào."). KHÔNG mở đầu
+  bằng con số/thống kê, KHÔNG hook mơ hồ kiểu "bạn có biết...", "điều gì xảy ra nếu tôi nói với bạn..."
 - Các cảnh giữa: mỗi cảnh 1 insight/mẹo/sự thật cụ thể, đúng yêu cầu chiều sâu ở trên
 - Cảnh cuối: chốt lại giá trị cốt lõi bằng 1 câu cụ thể + lời kêu gọi tương tác (follow để xem thêm
   mỗi ngày, hoặc comment cho biết thói quen bạn đang xây — ưu tiên câu hỏi dễ trả lời)

@@ -27,7 +27,7 @@ BEAT = 60 / BPM
 BAR = 4 * BEAT
 N_BARS = 32
 LEN = int(round(N_BARS * BAR * SR))
-TARGET_LUFS = -12.0  # ngang bài nhạc có sẵn trong assets/music -> mức volume=0.15 khi mix vẫn cân
+TARGET_LUFS = -12.0  # ngang bài nhạc có sẵn trong assets/music (video_builder mix ở volume=0.2)
 
 # Hợp âm mỗi ô nhịp (lặp vòng 4 ô): voicing pad/arp + nốt bass (số MIDI)
 CHORDS = [
