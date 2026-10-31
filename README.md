@@ -5,7 +5,7 @@ Tự động tạo video TikTok (ảnh hoặc nền physics + giọng đọc + p
 ## Pipeline
 
 ```
-Chủ đề (tự truyền, hoặc để trống cho AI tự nghĩ, tránh lặp lại — xem topic_history.txt)
+Chủ đề (tự truyền, hoặc để trống cho AI tự nghĩ theo ngách nội dung — xem niches.py; tránh lặp lại — xem topic_history.txt)
        → Groq API (free) → script (title + lời thoại từng cảnh)
        → edge-tts (free) → giọng đọc từng cảnh (kèm timing từng từ)
        → physics_bg.py hoặc Pexels → nền bóng nảy tự sinh / ảnh Ken Burns
@@ -17,6 +17,21 @@ Chủ đề (tự truyền, hoặc để trống cho AI tự nghĩ, tránh lặp
 Output: file `.mp4` chuẩn TikTok (1080x1920, 9:16). Mặc định nền là clip bóng nảy vật lý tự sinh (kiểu "satisfying background" đang viral, không dính bản quyền như footage Minecraft/Subway Surfers), phụ đề tô nổi bật từng từ đúng lúc giọng đọc tới đó.
 
 **Auto-đăng TikTok:** pipeline có thể tự đăng video lên TikKok ở chế độ riêng tư (chỉ tài khoản của bạn xem được — do TikTok giới hạn app chưa qua audit chỉ đăng được lên account private). Xem hướng dẫn setup trong [`tiktok_auth.py`](tiktok_auth.py). Muốn video public: xem phần "Giới hạn cần biết" bên dưới.
+
+**Đổi ngách nội dung (niche)** không cần sửa code. Niche quyết định AI nghĩ chủ đề gì và viết script theo
+hướng nào (vai chuyên gia, thông điệp, quy tắc số liệu, hook, CTA, hashtag) — định nghĩa trong
+[`niches.py`](niches.py):
+
+| Niche | Nội dung |
+|---|---|
+| `habits` (mặc định) | Build habit — kỷ luật mỗi ngày > cảm xúc nhất thời |
+| `general` | Chung chung như bản đầu: tài chính, sức khỏe, tâm lý, năng suất, mẹo vặt... |
+| `"câu mô tả bất kỳ"` | Ngách tự do, vd `"quản lý tài chính cho sinh viên"` — AI tự bám theo mô tả |
+
+- Chạy local: `python main.py --niche general` hoặc đặt `CONTENT_NICHE=general` trong `.env`
+- GitHub Actions (lịch chạy hằng ngày): tạo repo variable `CONTENT_NICHE` ở **Settings → Secrets and
+  variables → Actions → Variables**. Khi **Run workflow** thủ công có ô `niche` để ghi đè cho lần đó.
+- Thêm preset mới: copy 1 mục trong `NICHES` ở `niches.py`, đổi key và nội dung.
 
 **Đổi style nền / giọng / ngôn ngữ / tốc độ** không cần sửa code — dùng flag khi chạy, xem `python main.py --help`.
 

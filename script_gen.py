@@ -1,7 +1,9 @@
 """Bước 1: Sinh script video bằng Groq API (free tier, rất nhanh)."""
 import json
+import random
 import requests
-from config import GROQ_API_KEY, GROQ_MODEL, DEFAULT_LANG
+from config import GROQ_API_KEY, GROQ_MODEL, DEFAULT_LANG, DEFAULT_NICHE
+from niches import Niche, get_niche
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -16,7 +18,8 @@ _LANG_NAMES = {
 }
 
 
-def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG) -> dict:
+def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG,
+                    niche: "str | Niche" = DEFAULT_NICHE) -> dict:
     """
     Trả về dict dạng:
     {
@@ -30,21 +33,25 @@ def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG) -
     - narration: câu thoại sẽ đọc (TTS)
     - image_query: từ khóa tiếng Anh để search ảnh minh họa (Pexels cần query tiếng Anh)
     - hashtags: dùng làm caption khi đăng TikTok (xem tiktok_poster.post_video_draft)
+    `niche`: tên preset hoặc mô tả tự do (xem niches.py) — quyết định vai chuyên gia, thông điệp,
+    quy tắc số liệu, hook, CTA và hashtag.
     """
     if not GROQ_API_KEY:
         raise RuntimeError("Thiếu GROQ_API_KEY. Xem file .env.example")
 
+    n = niche if isinstance(niche, Niche) else get_niche(niche)
     lang_name = _LANG_NAMES.get(lang, lang)
     system_prompt = (
-        f"Bạn là chuyên gia trong lĩnh vực liên quan đến chủ đề được giao, đồng thời là copywriter "
-        f"viết kịch bản video ngắn TikTok bằng {lang_name}. Phong cách cuốn hút, câu ngắn, dễ đọc to, "
-        "nhưng nội dung phải có chiều sâu và giá trị thực tế như một người thực sự hiểu chuyên môn "
+        f"{n.script_role} Kịch bản viết bằng {lang_name}. "
+        "Nội dung phải có chiều sâu và giá trị thực tế như một người thực sự hiểu chuyên môn "
         "đang chia sẻ, không phải lời khuyên chung chung ai cũng nói được. "
         "Luôn trả lời CHỈ bằng JSON hợp lệ, không thêm text nào khác, không markdown."
     )
+    theme_block = f"\n{n.theme}\n" if n.theme else ""
+    hashtag_hint = f", {n.hashtag_hint}" if n.hashtag_hint else ""
     user_prompt = f"""
 Viết kịch bản video TikTok về chủ đề: "{topic}"
-
+{theme_block}
 NGÔN NGỮ (bắt buộc, áp dụng cho TẤT CẢ nội dung trả về): title, hashtags, và narration của mọi
 cảnh PHẢI viết bằng {lang_name} — kể cả khi ví dụ/mô tả field bên dưới đây đang viết bằng tiếng
 Việt (đó chỉ là hướng dẫn cho bạn, không phải ngôn ngữ cần trả về). Không lẫn ngôn ngữ khác vào
@@ -52,8 +59,7 @@ bất kỳ field nào dù chỉ một phần.
 
 YÊU CẦU VỀ CHIỀU SÂU NỘI DUNG (quan trọng nhất):
 - Mỗi cảnh nội dung (trừ cảnh hook mở đầu và cảnh CTA kết thúc) PHẢI chứa ít nhất MỘT trong các yếu tố sau:
-  con số/tỷ lệ % cụ thể, ví dụ/tình huống thực tế, cơ chế hoặc lý do "tại sao nó xảy ra" (tâm lý, sinh học,
-  tài chính...), hoặc một bước hành động cụ thể người xem có thể làm ngay.
+  {n.evidence}
 - TUYỆT ĐỐI KHÔNG viết câu chung chung, sáo rỗng, hiển nhiên ai cũng biết mà không giải thích (vd: "hãy tiết
   kiệm tiền", "sức khỏe là quan trọng nhất", "hãy cố gắng mỗi ngày") — nếu nêu lời khuyên thì phải kèm THEO
   CÁCH LÀM hoặc LÝ DO cụ thể ngay trong câu đó.
@@ -61,15 +67,15 @@ YÊU CẦU VỀ CHIỀU SÂU NỘI DUNG (quan trọng nhất):
   hơn là lời khuyên hiển nhiên.
 - Mỗi cảnh nên nói về MỘT ý cụ thể riêng biệt, không lặp lại ý của cảnh khác, không dùng 2 cảnh để nói cùng
   một điều theo cách diễn đạt khác nhau.
+{n.facts_policy}
 - Narration PHẢI viết bằng {lang_name} thuần túy, không chèn xen từ/ký tự của ngôn ngữ khác vào giữa câu
   (trừ tên riêng hoặc thuật ngữ không có bản dịch tự nhiên).
 
 CẤU TRÚC:
 - Đúng {num_scenes} cảnh (scenes)
-- Cảnh 1: hook gây tò mò cụ thể trong 2 giây đầu — một câu hỏi bất ngờ, một con số gây sốc, hoặc một nghịch lý,
-  KHÔNG hook mơ hồ kiểu "bạn có biết..."
+- Cảnh 1: {n.hook}
 - Các cảnh giữa: mỗi cảnh 1 insight/mẹo/sự thật cụ thể, đúng yêu cầu chiều sâu ở trên
-- Cảnh cuối: chốt lại giá trị cốt lõi bằng 1 câu cụ thể + lời kêu gọi tương tác (like/follow/comment)
+- Cảnh cuối: {n.cta}
 
 FORMAT MỖI CẢNH:
 - "narration": lời thoại ngắn 1-2 câu bằng {lang_name}, giọng tự nhiên như đang kể chuyện, nhưng phải chứa
@@ -82,7 +88,7 @@ HASHTAGS (dùng làm caption khi đăng TikTok, giúp tăng khả năng viral):
   chứa dấu cách bên trong (viết liền không dấu cách)
 - Kết hợp 2-3 hashtag phổ biến tăng viral bằng {lang_name} (vd: #fyp #foryoupage #viral nếu tiếng
   Anh, #fyp #xuhuong nếu tiếng Việt — chọn dạng đúng ngôn ngữ đang yêu cầu) với các hashtag cụ thể
-  bằng {lang_name} bám sát chủ đề và nội dung video (không hashtag chung chung, vô nghĩa)
+  bằng {lang_name} bám sát chủ đề và nội dung video{hashtag_hint}, không hashtag vô nghĩa
 
 Trả về đúng format JSON sau, không thêm gì khác (title/hashtags/narration bằng {lang_name} như đã
 yêu cầu ở trên):
@@ -117,10 +123,11 @@ yêu cầu ở trên):
     return json.loads(content)
 
 
-def generate_topic(lang: str = DEFAULT_LANG, recent_topics: list | None = None) -> str:
+def generate_topic(lang: str = DEFAULT_LANG, recent_topics: list | None = None,
+                   niche: "str | Niche" = DEFAULT_NICHE) -> str:
     """Nhờ LLM nghĩ ra 1 chủ đề video TikTok mới, dùng khi chạy tự động (vd. GitHub Actions theo
     lịch) không có ai truyền sẵn chủ đề. `recent_topics` là các chủ đề đã dùng gần đây để tránh
-    lặp lại/na ná."""
+    lặp lại/na ná. `niche` quyết định phạm vi chủ đề (xem niches.py)."""
     if not GROQ_API_KEY:
         raise RuntimeError("Thiếu GROQ_API_KEY. Xem file .env.example")
 
@@ -130,16 +137,16 @@ def generate_topic(lang: str = DEFAULT_LANG, recent_topics: list | None = None) 
         joined = "; ".join(recent_topics[-15:])
         avoid = f"\nTRÁNH các chủ đề đã dùng gần đây (không lặp lại, không na ná): {joined}"
 
+    n = niche if isinstance(niche, Niche) else get_niche(niche)
+    angle = f"\nGóc tiếp cận cho lần này: {random.choice(n.angles)}\n" if n.angles else ""
+
     system_prompt = (
-        f"Bạn là chuyên gia sáng tạo nội dung TikTok, giỏi nghĩ ra chủ đề video ngắn hấp dẫn bằng "
-        f"{lang_name}. Luôn trả lời CHỈ bằng JSON hợp lệ, không thêm text nào khác, không markdown."
+        f"{n.topic_role} bằng {lang_name}. "
+        "Luôn trả lời CHỈ bằng JSON hợp lệ, không thêm text nào khác, không markdown."
     )
     user_prompt = f"""
-Nghĩ ra 1 chủ đề video TikTok MỚI, ngắn gọn (dưới 12 từ), thuộc một lĩnh vực bất kỳ trong: tài
-chính cá nhân, sức khỏe, tâm lý học, năng suất làm việc, sự thật thú vị, mẹo vặt cuộc sống, phát
-triển bản thân, khoa học đời thường, các mối quan hệ. Chủ đề phải cụ thể, gây tò mò, không chung
-chung, không phải chủ đề đã quá phổ biến/nhàm.
-
+{n.topic_instructions}
+{angle}
 NGÔN NGỮ (bắt buộc): "topic" PHẢI viết bằng {lang_name}, không lẫn ngôn ngữ khác dù chỉ một phần.
 {avoid}
 

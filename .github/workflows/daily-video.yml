@@ -30,6 +30,15 @@ on:
         description: "Tốc độ đọc (vd: +20%, +0%, -10%)"
         required: false
         default: ""
+      niche:
+        description: "Ngách nội dung: habits / general / hoặc 1 câu mô tả (để trống = repo variable CONTENT_NICHE, không có thì habits)"
+        required: false
+        default: ""
+      no_tiktok:
+        description: "Không đăng TikTok (chạy thử: video chỉ gửi Telegram + lưu artifact)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   generate-video:
@@ -64,6 +73,10 @@ jobs:
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
           TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
+          # Ngách nội dung cho lịch chạy tự động: đổi bằng repo variable CONTENT_NICHE (Settings >
+          # Secrets and variables > Actions > Variables), không cần sửa code. Input "niche" khi chạy
+          # tay sẽ ghi đè. Trống cả hai -> mặc định trong config.py (habits).
+          CONTENT_NICHE: ${{ github.event.inputs.niche || vars.CONTENT_NICHE }}
         run: |
           # Trên GitHub Actions (chạy theo lịch cron LẪN chạy tay để trống input): mặc định
           # background=slideshow, lang=en — khác mặc định physics/vi khi chạy local (config.py).
@@ -74,6 +87,7 @@ jobs:
           ARGS=(--background "${BACKGROUND:-slideshow}" --lang "${VIDEO_LANG:-en}")
           [ -n "${{ github.event.inputs.voice }}" ] && ARGS+=(--voice "${{ github.event.inputs.voice }}")
           [ -n "${{ github.event.inputs.rate }}" ] && ARGS+=(--rate "${{ github.event.inputs.rate }}")
+          [ "${{ github.event.inputs.no_tiktok }}" = "true" ] && ARGS+=(--no-tiktok)
 
           TOPIC="${{ github.event.inputs.topic }}"
           if [ -n "$TOPIC" ]; then

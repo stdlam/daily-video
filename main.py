@@ -3,11 +3,12 @@ Pipeline auto tạo video TikTok - chạy toàn bộ từ đầu đến cuối.
 
 Cách dùng:
     python main.py ["chủ đề video"] [--background physics|slideshow] [--voice <edge-tts voice>]
-                                     [--lang vi|en|...] [--rate +20%]
+                                     [--lang vi|en|...] [--rate +20%] [--niche habits|general|"mô tả"]
 
     Không truyền --background/--voice/--lang/--rate thì dùng mặc định trong config.py.
     Không truyền chủ đề thì AI (Groq) tự nghĩ 1 chủ đề mới, tránh lặp lại các chủ đề gần đây
-    (lưu trong topic_history.txt).
+    (lưu trong topic_history.txt). Chủ đề AI nghĩ và hướng viết script đi theo --niche (mặc định
+    CONTENT_NICHE / config.DEFAULT_NICHE) — xem niches.py.
 
 Yêu cầu: đã cài dependencies (pip install -r requirements.txt),
 đã set biến môi trường GROQ_API_KEY và PEXELS_API_KEY (xem .env.example).
@@ -20,7 +21,9 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-from config import OUTPUT_DIR, MUSIC_DIR, NUM_IMAGES, VIDEO_STYLE, DEFAULT_LANG, DEFAULT_VOICES, TTS_VOICE, TTS_RATE
+from config import (OUTPUT_DIR, MUSIC_DIR, NUM_IMAGES, VIDEO_STYLE, DEFAULT_LANG, DEFAULT_VOICES, TTS_VOICE,
+                    TTS_RATE, DEFAULT_NICHE)
+from niches import NICHES, get_niche
 from script_gen import generate_script, generate_topic
 from tts import generate_voice
 from images import fetch_image
@@ -44,12 +47,15 @@ def run_pipeline(
     lang: str = DEFAULT_LANG,
     rate: str = TTS_RATE,
     post_to_tiktok: bool = True,
+    niche: str = DEFAULT_NICHE,
 ) -> Path:
     resolved_voice = voice or DEFAULT_VOICES.get(lang, TTS_VOICE)
+    niche_obj = get_niche(niche)
+    print(f"Niche: {niche_obj.key} — {niche_obj.label}")
 
     if not topic:
         recent_topics = load_recent_topics()
-        topic = generate_topic(lang=lang, recent_topics=recent_topics)
+        topic = generate_topic(lang=lang, recent_topics=recent_topics, niche=niche_obj)
         print(f"[0/4] Không truyền chủ đề — AI tự nghĩ: {topic}")
     append_topic(topic)
 
@@ -61,7 +67,7 @@ def run_pipeline(
         f"[1/4] Đang tạo script cho chủ đề: {topic} (ngôn ngữ: {lang}, nền: {background}, "
         f"giọng: {resolved_voice}, tốc độ: {rate})"
     )
-    script = generate_script(topic, num_scenes=NUM_IMAGES, lang=lang)
+    script = generate_script(topic, num_scenes=NUM_IMAGES, lang=lang, niche=niche_obj)
     title = script["title"]
     hashtags = script.get("hashtags", [])
     scenes = script["scenes"]
@@ -159,6 +165,11 @@ def _parse_args() -> argparse.Namespace:
         help=f"Tốc độ đọc, vd: +20%%, +0%%, -10%% (video sẽ theo tốc độ này). Mặc định: {TTS_RATE.replace('%', '%%')}",
     )
     parser.add_argument(
+        "--niche", "-n", default=DEFAULT_NICHE,
+        help=f"Ngách nội dung: preset ({', '.join(NICHES)}) hoặc 1 câu mô tả tự do trong ngoặc kép. "
+             f"Mặc định: {DEFAULT_NICHE} (đổi qua biến môi trường CONTENT_NICHE). Xem niches.py",
+    )
+    parser.add_argument(
         "--no-tiktok", action="store_true",
         help="Bỏ qua đăng TikTok cho lần chạy này (vẫn lưu caption+hashtag ra file .txt cạnh video)",
     )
@@ -169,5 +180,5 @@ if __name__ == "__main__":
     args = _parse_args()
     run_pipeline(
         args.topic, background=args.background, voice=args.voice, lang=args.lang, rate=args.rate,
-        post_to_tiktok=not args.no_tiktok,
+        post_to_tiktok=not args.no_tiktok, niche=args.niche,
     )
