@@ -49,6 +49,11 @@ DEFAULT_VOICES = {
     "es": "es-ES-ElviraNeural",
 }
 
+# --- Ngách nội dung của kênh (xem niches.py) ---
+# Tên preset ("habits", "general", ...) hoặc 1 câu mô tả tự do. Ghi đè bằng biến môi trường
+# CONTENT_NICHE (vd. trong .env, hoặc repo variable trên GitHub) hoặc flag --niche khi chạy.
+DEFAULT_NICHE = os.getenv("CONTENT_NICHE", "").strip() or "habits"
+
 # --- LLM model (Groq free tier) ---
 GROQ_MODEL = "openai/gpt-oss-120b"
 
