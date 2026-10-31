@@ -30,6 +30,11 @@ on:
         description: "Tốc độ đọc (vd: +20%, +0%, -10%)"
         required: false
         default: ""
+      no_tiktok:
+        description: "Không đăng TikTok (chạy thử: video chỉ gửi Telegram + lưu artifact)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   generate-video:
@@ -74,6 +79,7 @@ jobs:
           ARGS=(--background "${BACKGROUND:-slideshow}" --lang "${VIDEO_LANG:-en}")
           [ -n "${{ github.event.inputs.voice }}" ] && ARGS+=(--voice "${{ github.event.inputs.voice }}")
           [ -n "${{ github.event.inputs.rate }}" ] && ARGS+=(--rate "${{ github.event.inputs.rate }}")
+          [ "${{ github.event.inputs.no_tiktok }}" = "true" ] && ARGS+=(--no-tiktok)
 
           TOPIC="${{ github.event.inputs.topic }}"
           if [ -n "$TOPIC" ]; then
