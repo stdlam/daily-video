@@ -5,7 +5,7 @@ Tự động tạo video TikTok (ảnh hoặc nền physics + giọng đọc + p
 ## Pipeline
 
 ```
-Chủ đề (tự truyền, hoặc để trống cho AI tự nghĩ, tránh lặp lại — xem topic_history.txt)
+Chủ đề (tự truyền, hoặc để trống cho AI tự nghĩ về build habit / kỷ luật > cảm xúc — xem CHANNEL_THEME trong script_gen.py; tránh lặp lại — xem topic_history.txt)
        → Groq API (free) → script (title + lời thoại từng cảnh)
        → edge-tts (free) → giọng đọc từng cảnh (kèm timing từng từ)
        → physics_bg.py hoặc Pexels → nền bóng nảy tự sinh / ảnh Ken Burns

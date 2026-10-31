@@ -1,9 +1,35 @@
 """Bước 1: Sinh script video bằng Groq API (free tier, rất nhanh)."""
 import json
+import random
 import requests
 from config import GROQ_API_KEY, GROQ_MODEL, DEFAULT_LANG
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# Thông điệp cốt lõi của kênh — dùng chung cho bước nghĩ chủ đề và bước viết script. Mục tiêu dài
+# hạn: kéo người xem vào tư duy "build habit" để làm nền cho việc giới thiệu app sau này (hiện
+# chưa nhắc app trong video — khi cần, thêm CTA ở cảnh cuối của generate_script).
+CHANNEL_THEME = """THÔNG ĐIỆP CỐT LÕI CỦA KÊNH: kỷ luật mỗi ngày quan trọng hơn cảm xúc nhất thời.
+Người thành công không chờ có hứng/có động lực mới làm — họ làm theo hệ thống và thói quen, kể cả
+khi không muốn. Động lực đến sau hành động chứ không đến trước. Thói quen nhỏ lặp lại đều đặn
+thắng nỗ lực lớn nhưng thất thường. Kênh giúp người xem thay đổi TƯ DUY về việc xây dựng thói quen."""
+
+# Các góc tiếp cận khác nhau của cùng một thông điệp — chọn ngẫu nhiên mỗi lần để chủ đề đa dạng,
+# không bị lặp một ý.
+HABIT_ANGLES = [
+    "động lực/cảm hứng là cái bẫy: vì sao chờ 'có hứng' khiến bạn mãi không bắt đầu",
+    "hành động đi trước, động lực đi sau: cách bắt đầu khi không muốn làm gì",
+    "thói quen nhỏ lặp lại mỗi ngày (quy tắc 2 phút, atomic habits, 1% mỗi ngày) thắng nỗ lực lớn thất thường",
+    "hệ thống thắng mục tiêu: vì sao đặt mục tiêu mà không có hệ thống thì thất bại",
+    "khoa học về hình thành thói quen: vòng lặp tín hiệu - hành vi - phần thưởng, thời gian thực sự để thành thói quen",
+    "vì sao bỏ cuộc sau vài ngày đầu và cách không đứt chuỗi (không bỏ lỡ 2 ngày liên tiếp)",
+    "thiết kế môi trường và gắn thói quen mới vào thói quen cũ để không phụ thuộc ý chí",
+    "bản sắc: trở thành 'người làm việc đó' thay vì chỉ muốn đạt kết quả",
+    "kỷ luật là sự tự do: giữ lời hứa với chính mình xây dựng lòng tự tin ra sao",
+    "cảm xúc đến rồi đi, nhưng kỷ luật ở lại: cách hành động bất chấp tâm trạng mệt mỏi, chán nản, trì hoãn",
+    "sai lầm phổ biến khi xây thói quen (đặt quá cao, đổi quá nhiều thứ cùng lúc, bắt đầu bằng 'thứ Hai tuần sau')",
+    "người bình thường kiên trì đều đặn vs người tài năng làm theo hứng: ai đi xa hơn và vì sao",
+]
 
 _LANG_NAMES = {
     "vi": "tiếng Việt",
@@ -36,14 +62,20 @@ def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG) -
 
     lang_name = _LANG_NAMES.get(lang, lang)
     system_prompt = (
-        f"Bạn là chuyên gia trong lĩnh vực liên quan đến chủ đề được giao, đồng thời là copywriter "
+        f"Bạn là chuyên gia về xây dựng thói quen và kỷ luật bản thân, đồng thời là copywriter "
         f"viết kịch bản video ngắn TikTok bằng {lang_name}. Phong cách cuốn hút, câu ngắn, dễ đọc to, "
-        "nhưng nội dung phải có chiều sâu và giá trị thực tế như một người thực sự hiểu chuyên môn "
+        "thẳng thắn, hơi 'tát nước vào mặt' nhưng thấu hiểu người xem, không giáo điều. "
+        "Nội dung phải có chiều sâu và giá trị thực tế như một người thực sự hiểu chuyên môn "
         "đang chia sẻ, không phải lời khuyên chung chung ai cũng nói được. "
         "Luôn trả lời CHỈ bằng JSON hợp lệ, không thêm text nào khác, không markdown."
     )
     user_prompt = f"""
 Viết kịch bản video TikTok về chủ đề: "{topic}"
+
+{CHANNEL_THEME}
+Hãy để video làm nổi bật thông điệp này một cách tự nhiên qua góc nhìn của chủ đề (không cần nhắc
+lại nguyên văn). Người xem xem xong phải thấy "kỷ luật đều đặn > cảm xúc/động lực nhất thời" và biết
+MỘT hành động nhỏ có thể bắt đầu ngay hôm nay. KHÔNG nhắc tới bất kỳ app/sản phẩm/dịch vụ nào.
 
 NGÔN NGỮ (bắt buộc, áp dụng cho TẤT CẢ nội dung trả về): title, hashtags, và narration của mọi
 cảnh PHẢI viết bằng {lang_name} — kể cả khi ví dụ/mô tả field bên dưới đây đang viết bằng tiếng
@@ -61,6 +93,10 @@ YÊU CẦU VỀ CHIỀU SÂU NỘI DUNG (quan trọng nhất):
   hơn là lời khuyên hiển nhiên.
 - Mỗi cảnh nên nói về MỘT ý cụ thể riêng biệt, không lặp lại ý của cảnh khác, không dùng 2 cảnh để nói cùng
   một điều theo cách diễn đạt khác nhau.
+- KHÔNG bịa số liệu, nghiên cứu hay tên tác giả. Chỉ dùng con số/nghiên cứu có thật và bạn chắc chắn
+  (vd: nghiên cứu của Phillippa Lally: trung bình ~66 ngày để một hành vi thành tự động, dao động
+  18-254 ngày; quy tắc 2 phút; "không bỏ lỡ 2 ngày liên tiếp"; 1.01^365 ≈ 37.8). Nếu không chắc về
+  con số, hãy dùng ví dụ/tình huống/cơ chế thay vì con số.
 - Narration PHẢI viết bằng {lang_name} thuần túy, không chèn xen từ/ký tự của ngôn ngữ khác vào giữa câu
   (trừ tên riêng hoặc thuật ngữ không có bản dịch tự nhiên).
 
@@ -69,7 +105,8 @@ CẤU TRÚC:
 - Cảnh 1: hook gây tò mò cụ thể trong 2 giây đầu — một câu hỏi bất ngờ, một con số gây sốc, hoặc một nghịch lý,
   KHÔNG hook mơ hồ kiểu "bạn có biết..."
 - Các cảnh giữa: mỗi cảnh 1 insight/mẹo/sự thật cụ thể, đúng yêu cầu chiều sâu ở trên
-- Cảnh cuối: chốt lại giá trị cốt lõi bằng 1 câu cụ thể + lời kêu gọi tương tác (like/follow/comment)
+- Cảnh cuối: chốt lại giá trị cốt lõi bằng 1 câu cụ thể + lời kêu gọi tương tác (follow để xem thêm
+  mỗi ngày, hoặc comment cho biết thói quen bạn đang xây — ưu tiên câu hỏi dễ trả lời)
 
 FORMAT MỖI CẢNH:
 - "narration": lời thoại ngắn 1-2 câu bằng {lang_name}, giọng tự nhiên như đang kể chuyện, nhưng phải chứa
@@ -82,7 +119,9 @@ HASHTAGS (dùng làm caption khi đăng TikTok, giúp tăng khả năng viral):
   chứa dấu cách bên trong (viết liền không dấu cách)
 - Kết hợp 2-3 hashtag phổ biến tăng viral bằng {lang_name} (vd: #fyp #foryoupage #viral nếu tiếng
   Anh, #fyp #xuhuong nếu tiếng Việt — chọn dạng đúng ngôn ngữ đang yêu cầu) với các hashtag cụ thể
-  bằng {lang_name} bám sát chủ đề và nội dung video (không hashtag chung chung, vô nghĩa)
+  bằng {lang_name} bám sát chủ đề và nội dung video, ưu tiên nhóm thói quen/kỷ luật/phát triển bản
+  thân (vd: #habits #discipline #selfimprovement #motivation nếu tiếng Anh; #thoiquen #kyluat
+  #phattrienbanthan nếu tiếng Việt — dùng đúng ngôn ngữ đang yêu cầu), không hashtag vô nghĩa
 
 Trả về đúng format JSON sau, không thêm gì khác (title/hashtags/narration bằng {lang_name} như đã
 yêu cầu ở trên):
@@ -130,15 +169,22 @@ def generate_topic(lang: str = DEFAULT_LANG, recent_topics: list | None = None) 
         joined = "; ".join(recent_topics[-15:])
         avoid = f"\nTRÁNH các chủ đề đã dùng gần đây (không lặp lại, không na ná): {joined}"
 
+    angle = random.choice(HABIT_ANGLES)
+
     system_prompt = (
-        f"Bạn là chuyên gia sáng tạo nội dung TikTok, giỏi nghĩ ra chủ đề video ngắn hấp dẫn bằng "
-        f"{lang_name}. Luôn trả lời CHỈ bằng JSON hợp lệ, không thêm text nào khác, không markdown."
+        f"Bạn là chuyên gia sáng tạo nội dung TikTok cho một kênh về XÂY DỰNG THÓI QUEN và KỶ LUẬT "
+        f"BẢN THÂN, giỏi nghĩ ra chủ đề video ngắn hấp dẫn bằng {lang_name}. "
+        "Luôn trả lời CHỈ bằng JSON hợp lệ, không thêm text nào khác, không markdown."
     )
     user_prompt = f"""
-Nghĩ ra 1 chủ đề video TikTok MỚI, ngắn gọn (dưới 12 từ), thuộc một lĩnh vực bất kỳ trong: tài
-chính cá nhân, sức khỏe, tâm lý học, năng suất làm việc, sự thật thú vị, mẹo vặt cuộc sống, phát
-triển bản thân, khoa học đời thường, các mối quan hệ. Chủ đề phải cụ thể, gây tò mò, không chung
-chung, không phải chủ đề đã quá phổ biến/nhàm.
+{CHANNEL_THEME}
+
+Nghĩ ra 1 chủ đề video TikTok MỚI, ngắn gọn (dưới 12 từ), nằm trong thông điệp cốt lõi trên.
+Góc tiếp cận cho lần này: {angle}
+
+Chủ đề phải cụ thể, gây tò mò, đánh vào nỗi đau/suy nghĩ có thật của người xem (vd: "tôi chỉ
+làm khi có hứng", "bỏ giữa chừng sau vài ngày", "đợi đủ động lực mới bắt đầu"), không chung chung,
+không sáo rỗng kiểu "hãy cố gắng mỗi ngày". KHÔNG đề cập tới bất kỳ app/sản phẩm nào.
 
 NGÔN NGỮ (bắt buộc): "topic" PHẢI viết bằng {lang_name}, không lẫn ngôn ngữ khác dù chỉ một phần.
 {avoid}
