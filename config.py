@@ -52,7 +52,10 @@ DEFAULT_VOICES = {
 # --- Ngách nội dung của kênh (xem niches.py) ---
 # Tên preset ("habits", "general", ...) hoặc 1 câu mô tả tự do. Ghi đè bằng biến môi trường
 # CONTENT_NICHE (vd. trong .env, hoặc repo variable trên GitHub) hoặc flag --niche khi chạy.
-DEFAULT_NICHE = os.getenv("CONTENT_NICHE", "").strip() or "habits"
+DEFAULT_NICHE = os.getenv("CONTENT_NICHE", "").strip() or "circle"
+# Hashtag cố định nối vào cuối caption mọi video (cách nhau bởi dấu cách), vd "#Happit #66DayChallenge".
+# Để trống = dùng brand_hashtags của niche (circle: #Happit). Đặt "none" để tắt hẳn.
+BRAND_HASHTAGS = os.getenv("BRAND_HASHTAGS", "").strip()
 
 # --- LLM model (Groq free tier) ---
 GROQ_MODEL = "openai/gpt-oss-120b"

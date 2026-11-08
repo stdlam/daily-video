@@ -24,7 +24,8 @@ hướng nào (vai chuyên gia, thông điệp, quy tắc số liệu, hook, CTA
 
 | Niche | Nội dung |
 |---|---|
-| `habits` (mặc định) | Build habit — kỷ luật mỗi ngày > cảm xúc nhất thời |
+| `circle` (mặc định) | Build habit cùng nhóm bạn — accountability, streak chung, thói quen lây lan. Gắn sẵn hashtag `#Happit` |
+| `habits` | Build habit một mình — kỷ luật mỗi ngày > cảm xúc nhất thời |
 | `general` | Chung chung như bản đầu: tài chính, sức khỏe, tâm lý, năng suất, mẹo vặt... |
 | `"câu mô tả bất kỳ"` | Ngách tự do, vd `"quản lý tài chính cho sinh viên"` — AI tự bám theo mô tả |
 
@@ -32,6 +33,8 @@ hướng nào (vai chuyên gia, thông điệp, quy tắc số liệu, hook, CTA
 - GitHub Actions (lịch chạy hằng ngày): tạo repo variable `CONTENT_NICHE` ở **Settings → Secrets and
   variables → Actions → Variables**. Khi **Run workflow** thủ công có ô `niche` để ghi đè cho lần đó.
 - Thêm preset mới: copy 1 mục trong `NICHES` ở `niches.py`, đổi key và nội dung.
+- Hashtag thương hiệu (luôn nối vào cuối caption, không qua AI): field `brand_hashtags` của niche, hoặc ghi
+  đè bằng biến môi trường / repo variable `BRAND_HASHTAGS` (vd `#Happit #66DayChallenge`, `none` để tắt).
 
 **Đổi style nền / giọng / ngôn ngữ / tốc độ** không cần sửa code — dùng flag khi chạy, xem `python main.py --help`.
 
