@@ -6,7 +6,7 @@ Chọn niche (ưu tiên từ trên xuống):
   3. Mặc định trong config.py: DEFAULT_NICHE
 
 Giá trị hợp lệ:
-  - Tên 1 preset trong NICHES bên dưới ("habits", "general", ...)
+  - Tên 1 preset trong NICHES bên dưới ("circle", "habits", "general", ...)
   - HOẶC 1 câu mô tả tự do, vd: --niche "quản lý tài chính cho sinh viên" → dùng template chung,
     AI tự bám theo mô tả đó. Tiện để thử ngách mới trước khi viết thành preset riêng.
 
@@ -38,6 +38,9 @@ class Niche:
     hook: str = ""             # hướng dẫn cảnh 1
     cta: str = ""              # hướng dẫn cảnh cuối
     hashtag_hint: str = ""     # gợi ý nhóm hashtag riêng của niche
+    # Hashtag cố định LUÔN được nối vào cuối caption (không qua AI, để không bị viết sai/quên),
+    # vd hashtag tên app. Ghi đè bằng biến môi trường BRAND_HASHTAGS (xem config.py).
+    brand_hashtags: list = field(default_factory=list)
 
 
 _HABITS_THEME = """THÔNG ĐIỆP CỐT LÕI CỦA KÊNH: kỷ luật mỗi ngày quan trọng hơn cảm xúc nhất thời.
@@ -45,7 +48,87 @@ Người thành công không chờ có hứng/có động lực mới làm — h
 khi không muốn. Động lực đến sau hành động chứ không đến trước. Thói quen nhỏ lặp lại đều đặn
 thắng nỗ lực lớn nhưng thất thường. Kênh giúp người xem thay đổi TƯ DUY về việc xây dựng thói quen."""
 
+_CIRCLE_THEME = """THÔNG ĐIỆP CỐT LÕI CỦA KÊNH: xây thói quen một mình rất dễ bỏ cuộc — xây cùng nhóm bạn thì vui
+hơn và bền hơn. Kỷ luật mỗi ngày vẫn quan trọng hơn cảm xúc nhất thời, nhưng kỷ luật không cần phải
+cô đơn: khi có vài người bạn cùng check-in, cùng giữ streak, cùng cổ vũ nhau, việc giữ lời hứa trở
+thành trò chơi chung chứ không còn là gánh nặng ý chí. Thói quen lây lan qua những người ta chơi cùng.
+Kênh giúp người xem thấy việc rủ bạn bè cùng xây thói quen là cách DỄ và VUI nhất để giữ kỷ luật."""
+
 NICHES = {
+    # Build habit CÙNG NHÓM BẠN — accountability, streak chung, thói quen lây lan. Hướng người xem tới
+    # tư duy "rủ bạn cùng xây thói quen", khớp tính năng circle của app Happit. Video CHƯA nhắc app
+    # (chỉ gắn hashtag #Happit); muốn nhắc app thì sửa field `cta` bên dưới.
+    "circle": Niche(
+        key="circle",
+        label="Build habit cùng nhóm bạn: kỷ luật dễ hơn, vui hơn khi có người đồng hành",
+        topic_role="Bạn là chuyên gia sáng tạo nội dung TikTok cho một kênh về XÂY DỰNG THÓI QUEN CÙNG NHÓM "
+                   "BẠN (accountability, streak chung, thử thách nhóm), giỏi nghĩ ra chủ đề video ngắn hấp dẫn",
+        topic_instructions=f"""{_CIRCLE_THEME}
+
+Nghĩ ra 1 chủ đề video TikTok MỚI, ngắn gọn (dưới 12 từ), nằm trong thông điệp cốt lõi trên — chủ đề
+PHẢI có yếu tố bạn bè/nhóm/người đồng hành, không phải chủ đề xây thói quen một mình.
+
+Chủ đề phải cụ thể, gây tò mò, đánh vào trải nghiệm có thật của người xem (vd: "hứa với bản thân rồi
+lại thôi", "rủ bạn đi tập được 3 hôm", "nhóm chat toàn hứa hẹn", "không muốn là người làm đứt streak
+của cả nhóm"), vui và dễ muốn chia sẻ cho bạn bè, không sáo rỗng. KHÔNG đề cập tới bất kỳ app/sản
+phẩm nào.""",
+        angles=[
+            "thất hứa với bản thân thì dễ, thất hứa với bạn bè thì khó: sức mạnh của accountability",
+            "streak chung: khi cả nhóm cùng giữ một chuỗi, không ai muốn là người làm đứt",
+            "thói quen lây lan: bạn giống những người bạn chơi cùng — chọn nhóm cũng là chọn thói quen",
+            "biến kỷ luật thành trò chơi: thử thách nhóm, ai giữ streak lâu nhất, phạt vui khi lỡ ngày",
+            "cổ vũ thay vì so sánh: cách để nhóm kéo nhau lên thay vì tạo áp lực cho nhau",
+            "những ngày tệ: một tin nhắn 'hôm nay làm chưa?' từ bạn bè mạnh hơn mọi động lực",
+            "nhóm nhỏ 3-5 người thắng nhóm đông: vì sao vòng tròn nhỏ giữ nhau tốt hơn",
+            "check-in mỗi ngày cùng bạn: chia sẻ cả tiến độ nhỏ, kể cả hôm chỉ làm được 2 phút",
+            "người yếu nhất cố hơn khi đi cùng nhóm (hiệu ứng Köhler): không muốn kéo cả nhóm xuống",
+            "ăn mừng chiến thắng nhỏ cùng nhau: niềm vui được chia sẻ làm thói quen bám lâu hơn",
+            "rủ đúng người: chọn bạn đồng hành xây thói quen thế nào, không phải ai cũng hợp",
+            "khi một người trong nhóm bỏ cuộc: cách kéo nhau quay lại thay vì cả nhóm tan rã",
+            "cặp đôi/bạn thân/bạn cùng phòng cùng xây 1 thói quen: chuyện nhỏ thành kỷ niệm chung",
+        ],
+        script_role="Bạn là chuyên gia về xây dựng thói quen và tâm lý nhóm (accountability, ảnh hưởng xã hội), "
+                    "đồng thời là copywriter viết kịch bản video ngắn TikTok. Phong cách cuốn hút, câu ngắn, dễ "
+                    "đọc to, vui, gần gũi như đang nói chuyện với bạn thân, thẳng thắn nhưng không giáo điều.",
+        theme=f"""{_CIRCLE_THEME}
+Hãy để video làm nổi bật thông điệp này một cách tự nhiên qua góc nhìn của chủ đề (không cần nhắc
+lại nguyên văn). Người xem xem xong phải thấy "xây thói quen cùng bạn bè thì dễ giữ và vui hơn làm một
+mình" và nghĩ ngay tới 1-2 người bạn muốn rủ. Đưa ra MỘT cách cụ thể để bắt đầu cùng bạn ngay hôm nay
+(vd: nhắn cho 2 người bạn, chọn chung 1 thói quen 2 phút, check-in mỗi tối). KHÔNG nhắc tới bất kỳ
+app/sản phẩm/dịch vụ nào. "image_query" ưu tiên hình ảnh nhóm bạn cùng làm việc gì đó (vd: "friends
+jogging together", "friends studying together", "group high five") khi phù hợp với cảnh.""",
+        evidence="""ví dụ/tình huống đời thường cụ thể với bạn bè/nhóm mà người xem nhận ra chính mình, cơ chế hoặc lý do
+  "tại sao nó xảy ra" (tâm lý nhóm, trách nhiệm xã hội, hành vi...), hoặc một bước hành động cụ thể người xem
+  có thể làm ngay cùng bạn bè. Con số KHÔNG bắt buộc — tối đa 1 con số cho cả video, và chỉ lấy từ DANH
+  SÁCH SỐ LIỆU ĐƯỢC PHÉP bên dưới.""",
+        facts_policy="""- CẤM BỊA SỐ LIỆU: không dùng bất kỳ thống kê dạng "X% người...", "nghiên cứu cho thấy...", "chỉ X người
+  trong 100..." NẰM NGOÀI danh sách dưới đây — kể cả các con số lan truyền trên mạng (vd: "có accountability
+  partner thì 95% đạt mục tiêu" / "65% nếu cam kết với người khác" là con số KHÔNG được dùng vì không rõ
+  nguồn). Không nêu tên nghiên cứu/tác giả nào ngoài danh sách. DANH SÁCH SỐ LIỆU ĐƯỢC PHÉP (dùng đúng như
+  ghi, không phóng đại):
+    * Wing & Jeffery (1999), nghiên cứu về giảm cân: 95% người tham gia cùng bạn bè theo đến hết chương
+      trình, so với 76% người tham gia một mình.
+    * Christakis & Fowler (2007), theo dõi một mạng lưới xã hội suốt 32 năm: khi một người bạn trở nên béo
+      phì, khả năng bản thân mình béo phì tăng 57% — minh họa việc thói quen lây lan qua bạn bè (chỉ dùng để
+      nói thói quen lây lan, KHÔNG dùng để chê ngoại hình hay body-shaming).
+    * Nghiên cứu của Phillippa Lally (2009): trung bình ~66 ngày để một hành vi thành tự động, dao động
+      18-254 ngày.
+    * Hiệu ứng Köhler: khi làm cùng nhóm, người yếu hơn thường cố gắng hơn so với khi làm một mình (hiện
+      tượng tâm lý, KHÔNG kèm con số).
+  Thay vì số liệu, hãy thuyết phục bằng tình huống đời thường với bạn bè, nghịch lý, và cơ chế dễ hiểu.""",
+        hook="""hook trong 2 giây đầu — một nghịch lý hoặc một câu nói thẳng chạm đúng trải nghiệm của người xem với bạn
+  bè/nhóm (vd: "Bạn không thiếu kỷ luật. Bạn chỉ đang làm một mình.", "Thất hứa với bản thân thì dễ. Thất
+  hứa với bạn thân thì không."). KHÔNG mở đầu bằng con số/thống kê, KHÔNG hook mơ hồ kiểu "bạn có biết...",
+  "điều gì xảy ra nếu tôi nói với bạn..." """.rstrip(),
+        cta="""chốt lại giá trị cốt lõi bằng 1 câu cụ thể + lời kêu gọi TAG BẠN BÈ (vd: tag 1-2 người bạn
+  muốn cùng xây thói quen này, hoặc comment thói quen nhóm bạn muốn bắt đầu) — ưu tiên lời kêu gọi khiến
+  người xem muốn gửi video cho bạn mình""",
+        hashtag_hint="""ưu tiên nhóm xây thói quen cùng bạn bè/accountability (vd:
+  #habitswithfriends #accountability #accountabilitypartner #buildhabits #selfimprovement nếu tiếng Anh;
+  #thoiquen #kyluat #cungnhau #phattrienbanthan nếu tiếng Việt — dùng đúng ngôn ngữ đang yêu cầu)""",
+        brand_hashtags=["#Happit"],
+    ),
+
     # Build habit — kỷ luật > cảm xúc. Làm nền để sau này giới thiệu app (hiện CHƯA nhắc app; khi
     # cần, sửa field `cta` bên dưới).
     "habits": Niche(

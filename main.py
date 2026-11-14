@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Optional
 
 from config import (OUTPUT_DIR, MUSIC_DIR, NUM_IMAGES, VIDEO_STYLE, DEFAULT_LANG, DEFAULT_VOICES, TTS_VOICE,
-                    TTS_RATE, DEFAULT_NICHE)
+                    TTS_RATE, DEFAULT_NICHE, BRAND_HASHTAGS)
 from niches import NICHES, get_niche
 from script_gen import generate_script, generate_topic
 from tts import generate_voice
@@ -38,6 +38,20 @@ def _sanitize_filename(name: str) -> str:
     do LLM sinh ra có thể chứa các ký tự này (vd. ngày tháng viết kiểu "2/9")."""
     cleaned = re.sub(r'[\\/:*?"<>|]+', '_', name).strip('_ ')
     return cleaned or "video"
+
+
+def _merge_brand_hashtags(hashtags: list, brand: list) -> list:
+    """Nối hashtag thương hiệu vào cuối, bỏ trùng (không phân biệt hoa thường)."""
+    seen = {h.lower() for h in hashtags}
+    return hashtags + [b for b in brand if b.lower() not in seen]
+
+
+def _resolve_brand_hashtags(niche_brand: list) -> list:
+    if BRAND_HASHTAGS.lower() == "none":
+        return []
+    if BRAND_HASHTAGS:
+        return ["#" + t.lstrip("#") for t in BRAND_HASHTAGS.split() if t.lstrip("#")]
+    return list(niche_brand)
 
 
 def run_pipeline(
@@ -69,7 +83,7 @@ def run_pipeline(
     )
     script = generate_script(topic, num_scenes=NUM_IMAGES, lang=lang, niche=niche_obj)
     title = script["title"]
-    hashtags = script.get("hashtags", [])
+    hashtags = _merge_brand_hashtags(script.get("hashtags", []), _resolve_brand_hashtags(niche_obj.brand_hashtags))
     scenes = script["scenes"]
     print(f"  → Tiêu đề: {title} ({len(scenes)} cảnh)")
 
