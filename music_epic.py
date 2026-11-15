@@ -1,280 +1,265 @@
-"""Tự sinh nhạc nền "Rise Together" — phong cách epic / cinematic trailer, bằng numpy, không dính bản quyền.
+"""Soạn + render nhạc nền "Rise Together" — epic orchestral, chơi bằng NHẠC CỤ LẤY MẪU THẬT.
 
-Ý tưởng âm nhạc (mạnh mẽ, hùng tráng, vẫn chừa chỗ cho giọng đọc):
-- Rê thứ, vòng hợp âm Dm - Bb - F - C (i - VI - III - VII)  -> kinh điển của nhạc trailer, hùng tráng
-- 112 BPM, kick dồn từng phách + tom/taiko trầm + tiếng vỗ (clap) có reverb dài  -> nhịp hành quân mạnh
-- Dàn dây ostinato nốt móc đơn, đồng ca "aah", kèn đồng chặn nhịp, bass có gằn  -> dày và đầy
-- Có riser dâng lên, tiếng va chạm (impact) trầm và chũm chọe (crash) ở mỗi mốc chuyển đoạn
-- Dải ~2kHz được khoét bớt và nhạc đứt nhẹ theo nhịp kick (sidechain) -> giọng đọc TTS vẫn rõ
+Khác bản synth numpy trước (nghe rè, "rẻ tiền"): bài này được soạn thành MIDI (giai điệu chủ đề +
+bản phối dàn nhạc) rồi render bằng FluidSynth với SoundFont FluidR3_GM (mẫu âm thanh của kèn French
+horn, dàn dây, đồng ca, timpani, piano, bass, trống...). Sau đó mix/master bằng ffmpeg.
 
-Cấu trúc 40 ô nhịp (~85s), render dạng vòng tròn: đuôi riser/reverb cuộn về impact ở đầu bài, nên khi
-video_builder lặp nhạc (-stream_loop -1) sẽ nối liền mạch.
+Cần cài (chỉ khi muốn tạo lại bài, workflow hằng ngày chỉ dùng file .mp3 đã render):
+    apt-get install -y fluidsynth fluid-soundfont-gm ffmpeg ; pip install mido numpy
 
-  ô  0- 3  mở đầu: drone trầm + dây ngân, tim đập         ô 20-35  cao trào: đầy đủ, giai điệu lên cao
-  ô  4- 7  dồn dập: ostinato dây + taiko, snare roll       ô 36-39  hạ xuống + riser kéo về đầu bài
-  ô  8-15  đoạn chính: kick, clap, kèn, giai điệu A
-  ô 16-19  lắng: đồng ca + piano, riser
+Âm nhạc:
+- Rê thứ, 108 BPM. Đoạn chính: Dm - Bb - F - C. Cao trào: Dm - Bb - Gm - A (A trưởng kéo về Dm)
+- Chủ đề (motif) 4 ô nhịp rõ ràng, nhắc lại và nâng dần: kèn horn -> kèn + dây -> kèn + dây + đồng ca
+- Ostinato cello/viola nốt móc đơn dồn nhịp, timpani + kick + snare, brass stabs, snare/timpani roll
+- Khoét dải ~2kHz (cho giọng đọc TTS), loudness -11 LUFS
+- 40 ô nhịp (~89s), đuôi reverb/ngân cuộn về đầu bài -> lặp (-stream_loop -1) liền mạch
+
+  ô  0- 3  mở đầu: piano + dây ngân, timpani roll         ô 20-35  cao trào: chủ đề B, đồng ca, trumpet
+  ô  4- 7  dồn dập: ostinato, timpani, snare roll         ô 36-39  hạ xuống, kết ở A để quay về Dm
+  ô  8-15  đoạn chính: chủ đề A bằng kèn horn
+  ô 16-19  lắng: đồng ca + harp, dâng lên
 
 Chạy:  python music_epic.py                       # ghi ra assets/music/rise_together.mp3
-       python music_epic.py --out x.mp3 --seed 3  # đổi seed để ra biến thể (phase, độ lệch nhịp...)
+       python music_epic.py --out x.mp3 --seed 3  # seed đổi độ lệch nhịp/độ mạnh nhẹ ("người chơi")
 """
 import argparse
 import re
+import shutil
 import subprocess
 import tempfile
 import wave
 from pathlib import Path
 
+import mido
 import numpy as np
 
 SR = 44100
-BPM = 112
+BPM = 108
 BEAT = 60 / BPM
 BAR = 4 * BEAT
 N_BARS = 40
-LEN = int(round(N_BARS * BAR * SR))
-TARGET_LUFS = -11.0  # to hơn bài Daily Discipline (-12.3) một chút cho cảm giác "strong"
+TAIL_BARS = 2  # render dư để bắt đuôi reverb rồi cuộn về đầu bài
+TPB = 480
+SOUNDFONT = Path("/usr/share/sounds/sf2/FluidR3_GM.sf2")
+TARGET_LUFS = -11.0
 
-# Hợp âm mỗi ô nhịp (vòng 4 ô): voicing đồng ca/dây (số MIDI) + nốt bass
-CHORDS = [
-    {"upper": [62, 65, 69], "bass": 38},  # Dm
-    {"upper": [62, 65, 70], "bass": 34},  # Bb
-    {"upper": [60, 65, 69], "bass": 41},  # F
-    {"upper": [60, 64, 67], "bass": 36},  # C
-]
+# kênh MIDI -> (chương trình GM, âm lượng CC7, pan CC10)
+PIANO, STR, CELLO, VIOLA, HORN, BRASS, CHOIR, BASS, TIMP, DRUM, HARP, TRUMPET = range(12)
+INSTR = {
+    PIANO: (0, 95, 64), STR: (48, 82, 64), CELLO: (42, 105, 50), VIOLA: (41, 85, 78),
+    HORN: (60, 118, 60), BRASS: (61, 110, 64), CHOIR: (52, 78, 64), BASS: (43, 127, 64),
+    TIMP: (47, 127, 64), HARP: (46, 95, 80), TRUMPET: (56, 105, 70),
+}
 
-# Giai điệu 4 ô nhịp: (ô nhịp, phách bắt đầu, nốt MIDI, độ dài tính bằng phách)
-PHRASE_A = [(0, 0, 69, 2), (0, 2, 74, 2), (1, 0, 77, 2), (1, 2, 74, 2),
-            (2, 0, 72, 2), (2, 2, 77, 2), (3, 0, 76, 2), (3, 2, 72, 1), (3, 3, 69, 1)]
-PHRASE_B = [(0, 0, 81, 2), (0, 2, 77, 2), (1, 0, 82, 2), (1, 2, 79, 2),
-            (2, 0, 81, 2), (2, 2, 84, 2), (3, 0, 79, 2), (3, 2, 76, 2)]
+# Hợp âm: bass, âm lót (đồng ca/dây, quãng 4), voicing thấp cho piano
+CH = {
+    "Dm": {"bass": 38, "up": [62, 65, 69], "low": [50, 57, 62, 65]},
+    "Bb": {"bass": 34, "up": [62, 65, 70], "low": [46, 53, 58, 62]},
+    "F": {"bass": 41, "up": [60, 65, 69], "low": [53, 57, 60, 65]},
+    "C": {"bass": 36, "up": [60, 64, 67], "low": [48, 55, 60, 64]},
+    "Gm": {"bass": 31, "up": [62, 67, 70], "low": [43, 50, 55, 58]},
+    "A": {"bass": 33, "up": [61, 64, 69], "low": [45, 52, 57, 61]},
+}
+PROG_A = ["Dm", "Bb", "F", "C"]
+PROG_B = ["Dm", "Bb", "Gm", "A"]
 
-
-def midi_hz(m: float) -> float:
-    return 440.0 * 2 ** ((m - 69) / 12)
-
-
-def _t(n: int) -> np.ndarray:
-    return np.arange(n) / SR
-
-
-def add(bus: np.ndarray, sig: np.ndarray, t0: float, pan: float = 0.0, gain: float = 1.0) -> None:
-    """Cộng tín hiệu vào bus stereo tại t0 (giây), cuộn vòng về đầu bài nếu tràn cuối bài."""
-    idx = (int(round(t0 * SR)) + np.arange(sig.shape[-1])) % LEN
-    if sig.ndim == 1:
-        a = (pan + 1) * np.pi / 4  # constant-power pan
-        np.add.at(bus[0], idx, sig * np.cos(a) * gain)
-        np.add.at(bus[1], idx, sig * np.sin(a) * gain)
-    else:
-        np.add.at(bus[0], idx, sig[0] * gain)
-        np.add.at(bus[1], idx, sig[1] * gain)
+# Chủ đề: (phách trong 4 ô nhịp, độ dài phách, nốt MIDI)
+THEME_A = [(0, 1, 69), (1, 1, 74), (2, 1.5, 77), (3.5, .5, 76), (4, 3, 74), (7, .5, 72), (7.5, .5, 74),
+           (8, 1, 72), (9, 1, 77), (10, 1.5, 81), (11.5, .5, 79), (12, 2, 76), (14, 1, 74), (15, 1, 72)]
+THEME_B = [(0, 1, 74), (1, 1, 81), (2, 1.5, 81), (3.5, .5, 79), (4, 2, 77), (6, 1, 79), (7, 1, 81),
+           (8, 1.5, 82), (9.5, .5, 81), (10, 1, 79), (11, 1, 77), (12, 1, 76), (13, 1, 79), (14, 1, 76),
+           (15, 1, 73)]
 
 
-# ----------------------------------------------------------------------------- nhạc cụ
-_cache: dict = {}
+def prog_for(bar: int) -> str:
+    if 20 <= bar < 28 or 32 <= bar < 40:
+        return PROG_B[bar % 4]
+    return PROG_A[bar % 4]
 
 
-def _cached(key, fn):
-    if key not in _cache:
-        _cache[key] = fn()
-    return _cache[key]
+class Song:
+    def __init__(self, seed: int):
+        self.ev = []  # (tick, order, msg)
+        self.rng = np.random.default_rng(seed)
+
+    @staticmethod
+    def _tick(beat: float) -> int:
+        return int(round(beat * TPB))
+
+    def note(self, ch, pitch, beat, dur, vel, human=True):
+        if human and ch != DRUM:
+            beat += self.rng.normal(0, 0.008)
+            vel += self.rng.normal(0, 3)
+        beat = max(0.0, beat)
+        vel = int(np.clip(vel, 1, 127))
+        t0 = self._tick(beat)
+        t1 = max(t0 + 1, self._tick(beat + dur))
+        self.ev.append((t0, 1, mido.Message("note_on", channel=ch, note=int(pitch), velocity=vel)))
+        self.ev.append((t1, 0, mido.Message("note_off", channel=ch, note=int(pitch), velocity=0)))
+
+    def cc(self, ch, ctl, beat, val):
+        self.ev.append((self._tick(beat), -1, mido.Message("control_change", channel=ch, control=ctl,
+                                                            value=int(np.clip(val, 0, 127)))))
+
+    def expression(self, ch, beat0, beat1, v0, v1, steps=8):
+        """Dâng/hạ dần CC11 (expression) -> crescendo/diminuendo tự nhiên của dàn dây, đồng ca..."""
+        for i in range(steps + 1):
+            self.cc(ch, 11, beat0 + (beat1 - beat0) * i / steps, v0 + (v1 - v0) * i / steps)
+
+    def save(self, path: Path):
+        mid = mido.MidiFile(ticks_per_beat=TPB)
+        tr = mido.MidiTrack()
+        mid.tracks.append(tr)
+        tr.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(BPM), time=0))
+        for ch, (prog, vol, pan) in INSTR.items():
+            if ch != DRUM:
+                tr.append(mido.Message("program_change", channel=ch, program=prog, time=0))
+            tr.append(mido.Message("control_change", channel=ch, control=7, value=vol, time=0))
+            tr.append(mido.Message("control_change", channel=ch, control=10, value=pan, time=0))
+            tr.append(mido.Message("control_change", channel=ch, control=11, value=127, time=0))
+        tr.append(mido.Message("control_change", channel=DRUM, control=7, value=127, time=0))
+        last = 0
+        for tick, _, msg in sorted(self.ev, key=lambda e: (e[0], e[1])):
+            tr.append(msg.copy(time=tick - last))
+            last = tick
+        end = (N_BARS + TAIL_BARS) * 4 * TPB
+        tr.append(mido.MetaMessage("end_of_track", time=max(0, end - last)))
+        mid.save(str(path))
 
 
-def saw_ensemble(m: int, dur: float, rel: float = 0.25, attack: float = 0.02, bright: float = 0.12,
-                 detune=(-14, 0, 14), vib: float = 0.0, seed: int = 0) -> np.ndarray:
-    """Dàn dây/kèn: vài giọng sawtooth lệch cao độ (detune) -> stereo, dày. Trả về (2, n)."""
-    def make():
-        rng = np.random.default_rng(1000 + m + seed)
-        f0 = midi_hz(m)
-        n = int((dur + rel) * SR)
-        t = _t(n)
-        out = np.zeros((2, n))
-        for i, cents in enumerate(detune):
-            f = f0 * 2 ** (cents / 1200)
-            ph = 2 * np.pi * np.cumsum(f * (1 + vib * np.sin(2 * np.pi * 5.2 * t) * np.minimum(1, t / 0.6))) / SR
-            v = np.zeros(n)
-            k = 1
-            while k <= 40 and f * k < 9000:
-                v += (1 / k) * np.exp(-k * bright) * np.sin(k * ph + rng.uniform(0, 2 * np.pi))
-                k += 1
-            pan = -0.8 + 1.6 * i / max(1, len(detune) - 1)
-            a = (pan + 1) * np.pi / 4
-            out[0] += v * np.cos(a)
-            out[1] += v * np.sin(a)
-        env = np.minimum(1, t / attack)
-        tail = t > dur
-        env[tail] *= np.exp(-(t[tail] - dur) / (rel / 4))
-        return out * env / len(detune)
-    return _cached(("saw", m, round(dur, 3), rel, attack, bright, detune, vib, seed), make)
+# ----------------------------------------------------------------------------- bản phối
+def arrange(seed: int) -> Song:
+    s = Song(seed)
+    K, SN, HH, CR, T1, T2, T3 = 36, 38, 42, 49, 41, 43, 45  # kick, snare, hat, crash, toms
+
+    def roll(beat0, beat1, v0, v1, ch=DRUM, pitch=SN, step=0.25):
+        n = int(round((beat1 - beat0) / step))
+        for i in range(n):
+            s.note(ch, pitch, beat0 + i * step, step * 0.9, v0 + (v1 - v0) * i / max(1, n - 1))
+
+    for b in range(N_BARS):
+        name = prog_for(b)
+        c = CH[name]
+        b0 = b * 4  # phách bắt đầu ô nhịp
+        intro, build, main, calm = b < 4, 4 <= b < 8, 8 <= b < 16, 16 <= b < 20
+        final, outro = 20 <= b < 36, b >= 36
+        v = 62 if intro else 78 if build else 92 if main else 70 if calm else 104 if final else 66
+
+        # --- Dàn dây ngân (nền) + bass ---
+        for p in c["low"][1:] + [x + 12 for x in c["up"]][:2]:
+            s.note(STR, p, b0, 3.95, v - 8, human=False)
+        s.note(BASS, c["bass"], b0, 3.9, 84 if not (intro or calm) else 70, human=False)
+        if main or final:
+            s.note(BASS, c["bass"] + 12, b0, 3.9, 60, human=False)
+
+        # --- Piano rải hợp âm: mở đầu, lắng, hạ xuống ---
+        if intro or calm or outro:
+            tones = c["low"][1:] + [x + 12 for x in c["up"]]
+            order = [0, 1, 2, 3, 4, 5, 4, 3]
+            for i in range(8):
+                s.note(PIANO, tones[order[i] % len(tones)], b0 + i * 0.5, 1.6, 60 + (8 if i % 2 == 0 else 0))
+
+        # --- Harp lướt ở đoạn lắng và cao trào ---
+        if calm or (final and b % 2 == 0):
+            for i, p in enumerate(c["up"] + [c["up"][0] + 12, c["up"][1] + 12]):
+                s.note(HARP, p, b0 + i * 0.25, 1.5, 62)
+
+        # --- Ostinato cello + viola nốt móc đơn: dồn nhịp ---
+        if build or main or final:
+            pat = [0, 7, 12, 7, 0, 7, 12, 7]
+            for i, semi in enumerate(pat):
+                acc = 10 if i % 2 == 0 else 0
+                s.note(CELLO, c["bass"] + 12 + semi, b0 + i * 0.5, 0.42, v - 6 + acc)
+                if main or final:
+                    s.note(VIOLA, c["bass"] + 12 + semi + 12, b0 + i * 0.5, 0.42, v - 12 + acc)
+
+        # --- Brass stabs chặn nhịp: phách 1 và "và của 2" ---
+        if main or final:
+            for p in (c["bass"] + 24, c["bass"] + 31, c["bass"] + 36):
+                s.note(BRASS, p, b0, 1.0, v + 12)
+                s.note(BRASS, p, b0 + 1.5, 0.4, v + 4)
+
+        # --- Đồng ca: đoạn lắng (mềm) và cao trào (dày) ---
+        if calm or final:
+            for p in c["up"]:
+                s.note(CHOIR, p + 12, b0, 3.95, 78 if calm else 92, human=False)
+
+        # --- Timpani ---
+        if intro:
+            if b % 2 == 0:
+                s.note(TIMP, 38, b0, 2.0, 70)
+        elif build or calm or outro:
+            s.note(TIMP, c["bass"] + 12, b0, 1.5, 88 if build else 72)
+            if build:
+                s.note(TIMP, c["bass"] + 12, b0 + 2.5, 1.0, 80)
+        else:
+            s.note(TIMP, c["bass"] + 12, b0, 1.0, 110)
+            s.note(TIMP, c["bass"] + 12, b0 + 2.5, 0.8, 95)
+            s.note(TIMP, c["bass"] + 7, b0 + 3.5, 0.8, 95)
+
+        # --- Trống ---
+        if build:
+            for beat in (0, 2):
+                s.note(DRUM, K, b0 + beat, 0.3, 90)
+            if b % 2 == 1:
+                s.note(DRUM, T3, b0 + 3.5, 0.3, 90)
+        elif main or final:
+            for beat in range(4):
+                s.note(DRUM, K, b0 + beat, 0.3, 112 if beat % 2 == 0 else 98)
+            for beat in (1, 3):
+                s.note(DRUM, SN, b0 + beat, 0.3, 112)
+            for i in range(8):
+                s.note(DRUM, HH, b0 + i * 0.5, 0.2, 78 if i % 2 else 52)
+            s.note(DRUM, T2, b0 + 2.5, 0.3, 96)
+            s.note(DRUM, T1, b0 + 3.5, 0.3, 100)
+            if final and b % 2 == 1:
+                s.note(DRUM, T3, b0 + 3.75, 0.3, 100)
+        elif b == 19:
+            roll(b0 + 2, b0 + 4, 40, 118)
+
+        # --- Mốc chuyển đoạn: crash + hit; roll dồn vào mốc ---
+        if b in (0, 8, 20, 28, 32):
+            s.note(DRUM, CR, b0, 3.0, 118 if b in (0, 8, 20) else 100)
+            s.note(DRUM, K, b0, 0.4, 125)
+            s.note(TIMP, c["bass"] + 12, b0, 2.0, 125)
+        if b in (7, 15, 27, 31, 35):
+            roll(b0 + 2, b0 + 4, 45, 124)
+            roll(b0 + 2, b0 + 4, 60, 120, ch=TIMP, pitch=c["bass"] + 12)
+        if b == 3:
+            roll(b0 + 1.5, b0 + 4, 40, 112, ch=TIMP, pitch=38)
+        if b == 39:  # kéo về hit ở ô 0 khi lặp
+            roll(b0 + 2, b0 + 4, 30, 110)
+            roll(b0 + 1, b0 + 4, 40, 120, ch=TIMP, pitch=45)
+
+    # --- Expression: dâng/hạ dàn dây theo từng đoạn (phách) ---
+    for ch in (STR, CHOIR, CELLO, VIOLA):
+        s.expression(ch, 0, 64, 70, 105)       # mở đầu -> đoạn chính: dâng dần
+        s.expression(ch, 64, 80, 105, 78)      # lắng
+        s.expression(ch, 80, 144, 90, 127)     # cao trào: dâng liên tục
+        s.expression(ch, 144, 160, 122, 85)    # hạ xuống
+
+    # --- Chủ đề: (nhạc cụ, dịch quãng tám, chênh velocity) ---
+    def theme(start_bar, notes, instr, vel=100, dur_scale=0.96):
+        for beat, dur, p in notes:
+            for ch, shift, dv in instr:
+                s.note(ch, p + shift, start_bar * 4 + beat, dur * dur_scale, vel + dv)
+
+    theme(8, THEME_A, [(HORN, 0, 0)], vel=96)
+    theme(12, THEME_A, [(HORN, 0, 8), (STR, 0, -6), (TRUMPET, 0, -16)], vel=100)
+    theme(20, THEME_B, [(HORN, 0, 8), (STR, 0, 0), (TRUMPET, 0, -6), (CHOIR, 0, -8)], vel=104)
+    theme(24, THEME_B, [(HORN, 0, 8), (STR, 12, -2), (TRUMPET, 0, -4), (CHOIR, 0, -6)], vel=108)
+    theme(28, THEME_A, [(HORN, 12, 6), (HORN, 0, 0), (STR, 12, 0), (TRUMPET, 12, -4), (CHOIR, 12, -10)], vel=108)
+    theme(32, THEME_B, [(HORN, 0, 12), (STR, 12, 4), (TRUMPET, 12, 0), (CHOIR, 12, -4), (BRASS, -12, -10)], vel=112)
+    theme(36, THEME_A, [(PIANO, 12, -30)], vel=70)  # hạ xuống: giai điệu mềm bằng piano
+    return s
 
 
-def choir(m: int, dur: float, seed: int = 0) -> np.ndarray:
-    """Đồng ca 'aah': hài âm nhấn quanh vùng formant ~800Hz và ~1200Hz, attack chậm, có vibrato."""
-    def make():
-        rng = np.random.default_rng(2000 + m + seed)
-        f0 = midi_hz(m)
-        rel = 1.2
-        n = int((dur + rel) * SR)
-        t = _t(n)
-        out = np.zeros((2, n))
-        for cents, pan in ((-9, -0.7), (0, 0.0), (9, 0.7)):
-            f = f0 * 2 ** (cents / 1200)
-            ph = 2 * np.pi * np.cumsum(f * (1 + 0.004 * np.sin(2 * np.pi * 5.0 * t))) / SR
-            v = np.zeros(n)
-            for k in range(1, 30):
-                fk = f * k
-                if fk > 6000:
-                    break
-                w = (np.exp(-((fk - 800) / 330) ** 2) + 0.6 * np.exp(-((fk - 1200) / 380) ** 2)
-                     + 0.12 * np.exp(-k / 5)) / k ** 0.7
-                v += w * np.sin(k * ph + rng.uniform(0, 2 * np.pi))
-            a = (pan + 1) * np.pi / 4
-            out[0] += v * np.cos(a)
-            out[1] += v * np.sin(a)
-        env = np.minimum(1, t / 0.7)
-        tail = t > dur
-        env[tail] *= np.exp(-(t[tail] - dur) * 3.5)
-        return out * env / 3
-    return _cached(("choir", m, round(dur, 3), seed), make)
-
-
-def piano(m: int, vel: float, ring: float, rng) -> np.ndarray:
-    f = midi_hz(m)
-    n = int(ring * SR)
-    t = _t(n)
-    out = np.zeros(n)
-    for k in range(1, 10):
-        fk = f * k * np.sqrt(1 + 0.0004 * k * k)
-        if fk > 9000:
-            break
-        out += (1 / k ** 1.4) * np.sin(2 * np.pi * fk * t + rng.uniform(0, 2 * np.pi)) * np.exp(-t * (1.0 + 0.8 * k))
-    env = np.minimum(1, t / 0.004)
-    env[-int(0.05 * SR):] *= np.linspace(1, 0, int(0.05 * SR))
-    return out * env * vel
-
-
-def bass(m: int, dur: float) -> np.ndarray:
-    """Bass trầm có gằn: sine + hài âm, đẩy qua tanh để dày và nghe rõ cả trên loa nhỏ điện thoại."""
-    def make():
-        f = midi_hz(m)
-        n = int((dur + 0.08) * SR)
-        t = _t(n)
-        sig = np.sin(2 * np.pi * f * t) + 0.45 * np.sin(4 * np.pi * f * t) + 0.25 * np.sin(6 * np.pi * f * t)
-        sig = np.tanh(1.8 * sig) / 1.4
-        env = np.minimum(1, t / 0.006) * (0.8 + 0.2 * np.exp(-t * 7))
-        env[t > dur] *= np.exp(-(t[t > dur] - dur) * 55)
-        return sig * env
-    return _cached(("bass", m, round(dur, 3)), make)
-
-
-def kick(vel: float = 1.0) -> np.ndarray:
-    n = int(0.5 * SR)
-    t = _t(n)
-    freq = 44 + 95 * np.exp(-t * 34)
-    body = np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-t * 6.5)
-    click = np.exp(-t * 450) * 0.3
-    return (body + click) * np.minimum(1, t / 0.0015) * vel
-
-
-def taiko(vel: float = 1.0, pitch: float = 62.0) -> np.ndarray:
-    """Trống lớn kiểu taiko/tom trầm: cao độ rơi nhanh + ngân dài + chút tiếng da trống."""
-    def make():
-        n = int(1.1 * SR)
-        t = _t(n)
-        freq = pitch + 70 * np.exp(-t * 16)
-        body = np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-t * 4.2)
-        rng = np.random.default_rng(5)
-        skin = rng.standard_normal(n) * np.exp(-t * 55) * 0.35
-        return (body * 1.0 + skin) * np.minimum(1, t / 0.002)
-    return _cached(("taiko", pitch), make) * vel
-
-
-def clap(rng, vel: float = 1.0) -> np.ndarray:
-    """Snare/clap to: nhiều lớp nhiễu trễ nhau vài ms + thân trầm ~185Hz. Đưa vào bus có reverb."""
-    n = int(0.45 * SR)
-    t = _t(n)
-    noise = np.diff(rng.standard_normal(n + 1))
-    noise /= np.abs(noise).max()
-    burst = np.zeros(n)
-    for d in (0.0, 0.011, 0.023):
-        i = int(d * SR)
-        burst[i:] += noise[:n - i] * np.exp(-(t[:n - i]) * 30)
-    body = np.sin(2 * np.pi * 185 * t) * np.exp(-t * 26) * 0.7
-    return (burst * 0.55 + body) * vel
-
-
-def hat(rng, vel: float = 1.0) -> np.ndarray:
-    n = int(0.07 * SR)
-    t = _t(n)
-    noise = np.diff(rng.standard_normal(n + 2), 2)
-    noise /= np.abs(noise).max()
-    return noise * np.exp(-t * 80) * vel
-
-
-def crash(rng, dur: float = 3.2) -> np.ndarray:
-    n = int(dur * SR)
-    t = _t(n)
-    noise = np.diff(rng.standard_normal(n + 2), 2)
-    noise /= np.abs(noise).max()
-    return noise * np.exp(-t * 1.5) * np.minimum(1, t / 0.004)
-
-
-def impact(rng, dur: float = 2.6) -> np.ndarray:
-    """Cú 'boom' trầm ở mốc chuyển đoạn: sub-bass rơi tần số + nổ nhiễu ngắn."""
-    n = int(dur * SR)
-    t = _t(n)
-    freq = 28 + 55 * np.exp(-t * 6)
-    sub = np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-t * 1.5)
-    boom = np.diff(rng.standard_normal(n + 1))
-    boom = boom / np.abs(boom).max() * np.exp(-t * 9) * 0.5
-    return (sub * 1.1 + boom) * np.minimum(1, t / 0.002)
-
-
-def riser(rng, dur: float) -> np.ndarray:
-    """Tiếng dâng: nhiễu to dần + một đường sine trượt từ trầm lên cao."""
-    n = int(dur * SR)
-    t = _t(n)
-    x = t / dur
-    noise = np.diff(rng.standard_normal(n + 1))
-    noise /= np.abs(noise).max()
-    sweep = np.sin(2 * np.pi * np.cumsum(180 + 2400 * x ** 2) / SR)
-    sig = (noise * 0.6 + sweep * 0.5) * x ** 2.2
-    sig[-int(0.02 * SR):] *= np.linspace(1, 0, int(0.02 * SR))
-    return np.vstack([sig, np.roll(sig, 41)])
-
-
-# ----------------------------------------------------------------------------- xử lý
-def reverb(x: np.ndarray, rng, seconds: float, decay: float) -> np.ndarray:
-    """Reverb bằng convolution vòng tròn (FFT) -> đuôi reverb cuối bài cuộn về đầu bài."""
-    n = int(seconds * SR)
-    t = _t(n)
-    pre = int(0.02 * SR)
-    freqs = np.fft.rfftfreq(LEN, 1 / SR)
-    damp = 1 / (1 + (freqs / 6500) ** 2)
-    out = np.empty_like(x)
-    for ch in range(2):
-        ir = np.zeros(LEN)
-        ir[pre:pre + n] = rng.standard_normal(n) * np.exp(-t * decay)
-        out[ch] = np.fft.irfft(np.fft.rfft(x[ch]) * np.fft.rfft(ir) * damp, n=LEN)
-    peak = np.abs(out).max()
-    return out / peak if peak > 0 else out
-
-
-def master_eq(x: np.ndarray) -> np.ndarray:
-    f = np.fft.rfftfreq(LEN, 1 / SR)
-    f_safe = np.maximum(f, 1.0)
-    db = -4.0 * np.exp(-(np.log2(f_safe / 2000) ** 2) / (2 * 0.9 ** 2))  # khoét dải giọng nói
-    db += -4.0 / (1 + (12000 / f_safe) ** 4)                              # bớt chói trên 12k
-    gain = 10 ** (db / 20) * np.minimum(1, (f / 30) ** 2)                 # cắt siêu trầm < 30Hz
-    return np.fft.irfft(np.fft.rfft(x, axis=-1) * gain, n=LEN, axis=-1)
-
-
-def measure_lufs(wav_path: Path) -> float:
-    res = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(wav_path), "-af", "ebur128", "-f", "null", "-"],
-        capture_output=True, text=True,
-    )
-    return float(re.findall(r"I:\s+(-?[\d.]+) LUFS", res.stderr)[-1])
+# ----------------------------------------------------------------------------- render + master
+def read_wav(path: Path) -> np.ndarray:
+    with wave.open(str(path), "rb") as w:
+        assert w.getnchannels() == 2 and w.getsampwidth() == 2
+        raw = w.readframes(w.getnframes())
+    return np.frombuffer(raw, "<i2").astype(np.float64).reshape(-1, 2).T / 32768
 
 
 def write_wav(path: Path, x: np.ndarray) -> None:
@@ -286,163 +271,44 @@ def write_wav(path: Path, x: np.ndarray) -> None:
         w.writeframes(pcm.tobytes())
 
 
-# ----------------------------------------------------------------------------- phối khí
-def compose(seed: int = 7) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    music = np.zeros((2, LEN))   # dây, đồng ca, kèn, piano, giai điệu (có reverb, bị sidechain)
-    low = np.zeros((2, LEN))     # bass + drone (bị sidechain)
-    drums = np.zeros((2, LEN))   # kick, taiko, hat (khô)
-    wetdrums = np.zeros((2, LEN))  # clap/snare/crash/impact (đưa qua reverb dài)
-    fx = np.zeros((2, LEN))      # riser
-    kick_times = []
-
-    def beat_t(b, beat):  # thời điểm (giây) của phách `beat` trong ô nhịp b
-        return b * BAR + beat * BEAT
-
-    for b in range(N_BARS):
-        ch = CHORDS[b % 4]
-        root = ch["bass"]
-        intro, build, main, calm = b < 4, 4 <= b < 8, 8 <= b < 16, 16 <= b < 20
-        final, outro = 20 <= b < 36, b >= 36
-        energy = 0.55 if intro else 0.8 if build else 1.0 if main else 0.6 if calm else 1.1 if final else 0.7
-
-        # --- Nền ngân dài: dây trầm + drone ---
-        for m in (root + 12, root + 19, root + 24):
-            add(music, saw_ensemble(m, BAR * 0.98, rel=0.6, attack=0.35, bright=0.14), beat_t(b, 0),
-                gain=0.10 * energy)
-        add(low, bass(root, BAR * 0.99) * 0.55, beat_t(b, 0), gain=0.14 if (intro or calm or outro) else 0.07)
-
-        # --- Đồng ca: đoạn lắng và cao trào ---
-        if calm or final:
-            for m in ch["upper"]:
-                add(music, choir(m + 12, BAR * 0.98), beat_t(b, 0), gain=0.10 if final else 0.09)
-
-        # --- Piano rải ở đoạn mở đầu, lắng và hạ xuống ---
-        if intro or calm or outro:
-            tones = ch["upper"] + [p + 12 for p in ch["upper"]]
-            for i in range(8):
-                v = (1.0 if i % 2 == 0 else 0.7) * (0.85 + 0.15 * rng.random())
-                add(music, piano(tones[[0, 1, 2, 3, 4, 5, 4, 3][i]], v, 2.2, rng),
-                    beat_t(b, i * 0.5) + rng.normal(0, 0.004), pan=-0.3 if i % 2 else 0.3, gain=0.12)
-
-        # --- Ostinato dây nốt móc đơn: dồn dập, đẩy năng lượng ---
-        if build or main or final:
-            pat = [0, 12, 7, 12, 0, 12, 7, 12]
-            for i, semi in enumerate(pat):
-                acc = 1.0 if i % 2 == 0 else 0.7
-                add(music, saw_ensemble(root + 24 + semi, BEAT * 0.5 * 0.7, rel=0.07, attack=0.006, bright=0.08,
-                                        detune=(-9, 9)),
-                    beat_t(b, i * 0.5), gain=(0.22 if final else 0.17) * acc)
-
-        # --- Kèn đồng chặn nhịp: phách 1 dài và "và của 2" ngắn ---
-        if main or final:
-            for semi, g in ((0, 1.0), (7, 0.9), (12, 0.8)):
-                add(music, saw_ensemble(root + 24 + semi, BEAT * 1.1, rel=0.2, attack=0.015, bright=0.05,
-                                        detune=(-12, 0, 12)), beat_t(b, 0), gain=0.14 * g * energy)
-            for semi in (0, 7, 12):
-                add(music, saw_ensemble(root + 24 + semi, BEAT * 0.4, rel=0.12, attack=0.012, bright=0.05,
-                                        detune=(-12, 0, 12)), beat_t(b, 1.5), gain=0.10)
-
-        # --- Bass: nốt móc đơn dồn đoạn chính/cao trào, nốt dài ở đoạn build/outro ---
-        if main or final:
-            for i in range(8):
-                add(low, bass(root, BEAT * 0.5 * 0.82), beat_t(b, i * 0.5),
-                    gain=(0.17 if i % 2 == 0 else 0.12) * (1.1 if final else 1.0))
-        elif build or outro:
-            for beat in (0, 2):
-                add(low, bass(root, BEAT * 1.9), beat_t(b, beat), gain=0.20)
-
-        # --- Trống ---
-        if build:
-            for beat in (0, 2):
-                kick_times.append(beat_t(b, beat))
-                add(drums, kick(0.85), beat_t(b, beat), gain=0.38)
-            add(drums, taiko(1.0), beat_t(b, 0), gain=0.40)
-            add(drums, taiko(0.8, 58), beat_t(b, 3.5), gain=0.35)
-            if b == 7:  # snare roll dồn vào đoạn chính, dày dần
-                for i in range(8):
-                    add(wetdrums, clap(rng, 0.35 + 0.65 * i / 7), beat_t(b, 2 + i * 0.25), gain=0.35)
-        elif main or final:
-            for beat in range(4):
-                kick_times.append(beat_t(b, beat))
-                add(drums, kick(1.0 if beat % 2 == 0 else 0.85), beat_t(b, beat), gain=0.42)
-            add(drums, taiko(1.0), beat_t(b, 0), gain=0.38)
-            for beat in (1, 3):
-                add(wetdrums, clap(rng, 1.0), beat_t(b, beat), gain=0.65)
-            add(drums, taiko(0.85, 56), beat_t(b, 2.5), gain=0.32)
-            add(drums, taiko(0.8, 52), beat_t(b, 3.5), gain=0.32)
-            if final and b % 2 == 1:  # nhồi thêm 2 tiếng tom nối để cao trào có sức đẩy
-                add(drums, taiko(0.7, 66), beat_t(b, 3.75), gain=0.32)
-            for i in range(8):
-                add(drums, hat(rng, 0.9 if i % 2 else 0.45), beat_t(b, i * 0.5) + rng.normal(0, 0.003),
-                    pan=0.3, gain=0.09)
-            if b == 15 or b == 35:  # roll cuối đoạn
-                for i in range(8):
-                    add(wetdrums, clap(rng, 0.35 + 0.65 * i / 7), beat_t(b, 2 + i * 0.25), gain=0.35)
-        elif calm:
-            kick_times.append(beat_t(b, 0))
-            add(drums, taiko(0.8, 58), beat_t(b, 0), gain=0.4)
-        elif outro and b < 39:
-            add(drums, taiko(0.8 - 0.1 * (b - 36), 58), beat_t(b, 0), gain=0.4)
-
-        # --- Va chạm + chũm chọe ở mốc chuyển đoạn ---
-        if b in (0, 8, 20, 28, 32):
-            add(wetdrums, impact(rng), beat_t(b, 0), gain=0.5 if b in (0, 8, 20) else 0.35)
-            add(wetdrums, crash(rng), beat_t(b, 0), gain=0.35)
-
-    # --- Giai điệu (kèn + dây): A ở đoạn chính, B ở cao trào ---
-    def melody(start_bar, phrase, octave_double=False, gain=0.17):
-        for bar_off, beat, m, dur in phrase:
-            t0 = beat_t(start_bar + bar_off, beat)
-            add(music, saw_ensemble(m, dur * BEAT * 0.97, rel=0.3, attack=0.03, bright=0.06,
-                                    detune=(-10, 0, 10), vib=0.004, seed=1), t0, pan=0.1, gain=gain)
-            if octave_double:
-                add(music, saw_ensemble(m - 12, dur * BEAT * 0.97, rel=0.3, attack=0.03, bright=0.09,
-                                        detune=(-8, 8), vib=0.004, seed=2), t0, pan=-0.1, gain=gain * 0.7)
-
-    melody(8, PHRASE_A)
-    melody(12, PHRASE_A, octave_double=True)
-    for s in (20, 24, 28, 32):
-        melody(s, PHRASE_B, octave_double=True, gain=0.18)
-
-    # --- Riser dâng vào các mốc chuyển đoạn (kể cả cuối bài kéo về impact ở đầu bài) ---
-    for b_end, bars in ((4, 1.5), (8, 2), (20, 2), (N_BARS, 3)):
-        dur = BAR * bars
-        add(fx, riser(rng, dur), b_end * BAR - dur, gain=0.11)
-
-    # --- Sidechain: nhạc + bass lùi một chút ở mỗi tiếng kick -> "thở" theo nhịp ---
-    duck = np.ones(LEN)
-    win = int(0.35 * SR)
-    shape = 1 - 0.38 * np.exp(-_t(win) / 0.1)
-    for kt in kick_times:
-        idx = (int(round(kt * SR)) + np.arange(win)) % LEN
-        duck[idx] = np.minimum(duck[idx], shape)
-
-    wet_music = reverb(music, rng, seconds=2.8, decay=2.1)
-    wet_drums = reverb(wetdrums, rng, seconds=2.2, decay=3.0)
-    music_mix = (music + 0.38 * wet_music * np.abs(music).max()) * duck
-    drums_mix = drums + wetdrums * 0.8 + 0.45 * wet_drums * max(np.abs(wetdrums).max(), 1e-9)
-    mix = music_mix + low * duck + drums_mix + fx
-    mix = master_eq(mix)
-    return mix / np.abs(mix).max()
+def measure_lufs(wav_path: Path) -> float:
+    res = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(wav_path), "-af", "ebur128",
+                          "-f", "null", "-"], capture_output=True, text=True)
+    return float(re.findall(r"I:\s+(-?[\d.]+) LUFS", res.stderr)[-1])
 
 
 def render(out_path: Path, seed: int = 7) -> Path:
-    mix = compose(seed)
+    if not SOUNDFONT.exists() or not shutil.which("fluidsynth"):
+        raise SystemExit("Thiếu fluidsynth hoặc SoundFont: apt-get install -y fluidsynth fluid-soundfont-gm")
     with tempfile.TemporaryDirectory() as tmp:
-        wav = Path(tmp) / "mix.wav"
-        ceiling = 0.89  # ~ -1 dBFS
-        gain = 0.5
-        for _ in range(4):  # lặp vài lần vì limiter làm lệch loudness một chút
-            write_wav(wav, ceiling * np.tanh(mix * gain / ceiling))
-            gain *= 10 ** ((TARGET_LUFS - measure_lufs(wav)) / 20)
-        write_wav(wav, ceiling * np.tanh(mix * gain / ceiling))
-        out_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = Path(tmp)
+        mid, raw, folded, leveled = tmp / "song.mid", tmp / "raw.wav", tmp / "folded.wav", tmp / "leveled.wav"
+        arrange(seed).save(mid)
         subprocess.run(
-            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(wav),
-             "-codec:a", "libmp3lame", "-b:a", "192k", str(out_path)],
-            check=True,
-        )
+            ["fluidsynth", "-ni", "-q", "-F", str(raw), "-r", str(SR), "-g", "0.9",
+             "-o", "synth.reverb.active=1", "-o", "synth.reverb.room-size=0.85", "-o", "synth.reverb.damp=0.25",
+             "-o", "synth.reverb.width=0.9", "-o", "synth.reverb.level=0.55",
+             "-o", "synth.chorus.active=1", "-o", "synth.chorus.level=1.2",
+             str(SOUNDFONT), str(mid)],
+            check=True, capture_output=True)
+        x = read_wav(raw)
+        length = int(round(N_BARS * BAR * SR))
+        body, tail = x[:, :length].copy(), x[:, length:]
+        n = min(tail.shape[1], length)
+        body[:, :n] += tail[:, :n]  # cuộn đuôi về đầu bài -> lặp liền mạch
+        write_wav(folded, body)
+        # master: khoét dải giọng nói, nén nhẹ cho dày, rồi chuẩn loudness
+        chain = ("highpass=f=32,bass=g=4:f=90,equalizer=f=900:t=q:w=0.8:g=-3.5,equalizer=f=2200:t=q:w=0.9:g=-3,"
+                 "treble=g=3:f=7000,"
+                 "acompressor=threshold=-20dB:ratio=2.5:attack=20:release=250:makeup=2,alimiter=limit=0.8")
+        gain_db = TARGET_LUFS - measure_lufs(folded)
+        for _ in range(3):
+            subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(folded),
+                            "-af", f"volume={gain_db}dB,{chain}", str(leveled)], check=True)
+            gain_db += TARGET_LUFS - measure_lufs(leveled)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(leveled),
+                        "-codec:a", "libmp3lame", "-b:a", "192k", str(out_path)], check=True)
     return out_path
 
 
@@ -452,4 +318,4 @@ if __name__ == "__main__":
     ap.add_argument("--seed", type=int, default=7)
     args = ap.parse_args()
     path = render(args.out, args.seed)
-    print(f"Đã tạo nhạc nền: {path} ({N_BARS} ô nhịp, {BPM} BPM, {LEN / SR:.1f}s, lặp liền mạch)")
+    print(f"Đã tạo nhạc nền: {path} ({N_BARS} ô nhịp, {BPM} BPM, {N_BARS * BAR:.1f}s, lặp liền mạch)")
