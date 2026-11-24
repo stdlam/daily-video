@@ -13,8 +13,8 @@ Nguồn nhạc free để tải:
 (bản gốc -10.6 LUFS, đỉnh +0.3 dBFS dễ vỡ tiếng) để khớp mức mix `volume=0.2` trong `video_builder.py`.
 Dài 2:56, phần mở đầu 0-8s nhỏ hơn rồi đều từ giây 8; video 20-40s không chạm đoạn fade-out cuối bài.
 
-Kiểm tra điều khoản ghi nguồn (credit) của freetouse.com cho bài này; nếu bắt buộc, thêm dòng credit vào
-caption (vd qua `BRAND_HASHTAGS` không phù hợp — cần thêm 1 dòng caption riêng).
+Kiểm tra điều khoản ghi nguồn (credit) của freetouse.com cho bài này; nếu bắt buộc phải ghi nguồn, cần
+thêm 1 dòng credit vào caption mỗi video (pipeline hiện chưa tự thêm).
 
 Nhạc tự soạn trước đây (`rise_together.mp3`, tạo lại bằng [`music_epic.py`](../../music_epic.py); và
 `daily_discipline.mp3` bằng [`music_gen.py`](../../music_gen.py)) đã được thay thế, vẫn lấy lại được từ git.
