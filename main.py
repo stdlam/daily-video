@@ -41,6 +41,15 @@ def _sanitize_filename(name: str) -> str:
     return cleaned or "video"
 
 
+def _music_credit(music_path: Optional[Path]) -> str:
+    """Dòng ghi nguồn nhạc nền: đọc file <tên-bài>.credit.txt đặt cạnh file mp3 (nếu có) để nối vào cuối
+    caption — một số nhạc free (vd Free To Use) yêu cầu ghi nguồn. Bài nào không có file thì bỏ qua."""
+    if not music_path:
+        return ""
+    credit_file = music_path.with_suffix(".credit.txt")
+    return credit_file.read_text(encoding="utf-8").strip() if credit_file.exists() else ""
+
+
 def _merge_brand_hashtags(hashtags: list, brand: list) -> list:
     """Nối hashtag thương hiệu vào cuối, bỏ trùng (không phân biệt hoa thường)."""
     seen = {h.lower() for h in hashtags}
@@ -164,6 +173,9 @@ def run_pipeline(
     print(f"  → Thời lượng: {duration}s — đã ghi vào {EXPERIMENT_LOG.name}")
 
     tiktok_caption = f"{title}\n\n{' '.join(hashtags)}" if hashtags else title
+    credit = _music_credit(music_path)
+    if credit:
+        tiktok_caption += f"\n\n{credit}"
     tiktok_posted = False
     if post_to_tiktok:
         print("Đang đăng video lên TikTok (chế độ riêng tư, nếu đã cấu hình)...")
