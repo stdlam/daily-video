@@ -36,6 +36,16 @@ hướng nào (vai chuyên gia, thông điệp, quy tắc số liệu, hook, CTA
 - Hashtag thương hiệu (luôn nối vào cuối caption, không qua AI): field `brand_hashtags` của niche, hoặc ghi
   đè bằng biến môi trường / repo variable `BRAND_HASHTAGS` (vd `#Happit #66DayChallenge`, `none` để tắt).
 
+**Thí nghiệm câu mở đầu (A/B)**: biến `VIDEO_FORMAT` (hoặc `--format`, hoặc ô `video_format` khi Run
+workflow) chọn định dạng video:
+- `hook`: video ngắn 15–25s + chữ mở đầu cỡ lớn trên màn hình 3 giây đầu (đọc được cả khi tắt tiếng)
+- `classic`: như cũ
+- `ab` (mặc định): luân phiên theo ngày (ngày chẵn `hook`, ngày lẻ `classic`)
+
+Mỗi video được ghi vào `experiment_log.csv` (ngày, định dạng, thời lượng, chữ mở đầu, tiêu đề), workflow
+tự commit lại. Sau ~2 tuần, đối chiếu với TikTok Studio (tỷ lệ giữ chân ở giây thứ 3, thời gian xem trung
+bình, tỷ lệ xem hết) để chọn định dạng thắng, rồi đặt repo variable `VIDEO_FORMAT` cố định.
+
 **Đổi style nền / giọng / ngôn ngữ / tốc độ** không cần sửa code — dùng flag khi chạy, xem `python main.py --help`.
 
 ## Setup lần đầu (10-15 phút)

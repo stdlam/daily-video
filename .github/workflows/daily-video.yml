@@ -34,6 +34,10 @@ on:
         description: "Ngách nội dung: circle / habits / general / hoặc 1 câu mô tả (để trống = repo variable CONTENT_NICHE, không có thì circle)"
         required: false
         default: ""
+      video_format:
+        description: "Định dạng: hook / classic / ab (để trống = repo variable VIDEO_FORMAT, không có thì ab)"
+        required: false
+        default: ""
       no_tiktok:
         description: "Không đăng TikTok (chạy thử: video chỉ gửi Telegram + lưu artifact)"
         required: false
@@ -79,6 +83,8 @@ jobs:
           CONTENT_NICHE: ${{ github.event.inputs.niche || vars.CONTENT_NICHE }}
           # Hashtag cố định cuối caption (vd "#Happit #66DayChallenge", "none" để tắt). Trống -> theo niche.
           BRAND_HASHTAGS: ${{ vars.BRAND_HASHTAGS }}
+          # Thí nghiệm câu mở đầu: hook / classic / ab (luân phiên theo ngày). Trống -> ab.
+          VIDEO_FORMAT: ${{ github.event.inputs.video_format || vars.VIDEO_FORMAT }}
         run: |
           # Trên GitHub Actions (chạy theo lịch cron LẪN chạy tay để trống input): mặc định
           # background=slideshow, lang=en — khác mặc định physics/vi khi chạy local (config.py).
@@ -105,14 +111,15 @@ jobs:
         # topic_history.txt là file mới hoàn toàn (chưa track) — git diff thường bỏ sót file mới.
         if: always()
         run: |
-          if [ -f topic_history.txt ]; then
-            git add topic_history.txt
-            if ! git diff --cached --quiet -- topic_history.txt; then
-              git config user.name "github-actions[bot]"
-              git config user.email "github-actions[bot]@users.noreply.github.com"
-              git commit -m "chore: cập nhật lịch sử chủ đề"
-              git push
-            fi
+          # experiment_log.csv: nhật ký thí nghiệm định dạng video (hook/classic), xem main.py
+          for f in topic_history.txt experiment_log.csv; do
+            if [ -f "$f" ]; then git add "$f"; fi
+          done
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: cập nhật lịch sử chủ đề"
+            git push
           fi
 
       - name: Cảnh báo nếu TikTok cấp refresh_token mới

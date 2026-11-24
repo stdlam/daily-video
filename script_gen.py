@@ -19,7 +19,7 @@ _LANG_NAMES = {
 
 
 def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG,
-                    niche: "str | Niche" = DEFAULT_NICHE) -> dict:
+                    niche: "str | Niche" = DEFAULT_NICHE, fmt: str = "classic") -> dict:
     """
     Trả về dict dạng:
     {
@@ -35,6 +35,8 @@ def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG,
     - hashtags: dùng làm caption khi đăng TikTok (xem tiktok_poster.post_video_draft)
     `niche`: tên preset hoặc mô tả tự do (xem niches.py) — quyết định vai chuyên gia, thông điệp,
     quy tắc số liệu, hook, CTA và hashtag.
+    `fmt`: "classic" (như cũ) hoặc "hook" (video ngắn 15-25s + thêm field "hook_text" là chữ mở đầu cỡ
+    lớn hiện trên màn hình 3 giây đầu, xem caption.draw_hook_at). Prompt "classic" giữ nguyên để A/B.
     """
     if not GROQ_API_KEY:
         raise RuntimeError("Thiếu GROQ_API_KEY. Xem file .env.example")
@@ -49,6 +51,19 @@ def generate_script(topic: str, num_scenes: int = 5, lang: str = DEFAULT_LANG,
     )
     theme_block = f"\n{n.theme}\n" if n.theme else ""
     hashtag_hint = f", {n.hashtag_hint}" if n.hashtag_hint else ""
+    format_block, hook_json = "", ""
+    if fmt == "hook":
+        format_block = f"""ĐỊNH DẠNG VIDEO NGẮN (quan trọng, áp dụng ĐÈ lên độ dài ở trên):
+- Tổng thời lượng đọc 15-25 giây: cả video tối đa ~60 từ. Cảnh 1 tối đa 10 từ, mỗi cảnh còn lại 1 câu
+  ngắn tối đa 14 từ. Cắt hết từ đệm, đi thẳng vào ý.
+- "hook_text": chữ mở đầu cỡ lớn hiện trên màn hình trong 3 giây đầu (nhiều người lướt TikTok TẮT TIẾNG,
+  nên chữ này phải tự đứng được và khiến họ dừng lướt). Viết bằng {lang_name}, TỐI ĐA 7 từ, không hashtag,
+  không emoji, không dấu ngoặc kép. Là một nghịch lý / câu nói thẳng chạm đúng người xem, cùng ý với cảnh 1
+  nhưng có thể ngắn và gắt hơn (vd tiếng Anh: "You're not lazy. You're alone.", "Your friends are your
+  habits."). KHÔNG mở đầu bằng "Did you know" / "Bạn có biết".
+
+"""
+        hook_json = f'  "hook_text": "<on-screen hook in {lang_name}, max 7 words>",\n'
     user_prompt = f"""
 Viết kịch bản video TikTok về chủ đề: "{topic}"
 {theme_block}
@@ -90,11 +105,11 @@ HASHTAGS (dùng làm caption khi đăng TikTok, giúp tăng khả năng viral):
   Anh, #fyp #xuhuong nếu tiếng Việt — chọn dạng đúng ngôn ngữ đang yêu cầu) với các hashtag cụ thể
   bằng {lang_name} bám sát chủ đề và nội dung video{hashtag_hint}, không hashtag vô nghĩa
 
-Trả về đúng format JSON sau, không thêm gì khác (title/hashtags/narration bằng {lang_name} như đã
+{format_block}Trả về đúng format JSON sau, không thêm gì khác (title/hashtags/narration bằng {lang_name} như đã
 yêu cầu ở trên):
 {{
   "title": "<video title in {lang_name}>",
-  "hashtags": ["#...", "#..."],
+{hook_json}  "hashtags": ["#...", "#..."],
   "scenes": [
     {{"narration": "...", "image_query": "..."}}
   ]

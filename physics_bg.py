@@ -5,7 +5,7 @@ Không dùng footage game có bản quyền, 100% tự sinh bằng code, chạy 
 import random
 import numpy as np
 from PIL import Image, ImageDraw
-from caption import draw_caption_at
+from caption import draw_caption_at, draw_hook_at
 
 BG_COLOR = (18, 18, 28)
 PALETTE = [
@@ -94,7 +94,7 @@ def _step_and_draw(balls, width, height, gravity=0.55, damping=0.86):
 
 
 def frame_generator(width, height, fps, duration, num_balls=6, seed=None,
-                     wrapped_lines=None, font_path=None):
+                     wrapped_lines=None, font_path=None, hook_text=None):
     """Generator trả về từng frame (numpy array RGB) cho toàn bộ thời lượng. `wrapped_lines` (từ
     caption.wrap_words) quyết định từ nào đang được đọc tại thời điểm mỗi frame để tô nổi bật."""
     rng = random.Random(seed)
@@ -103,4 +103,5 @@ def frame_generator(width, height, fps, duration, num_balls=6, seed=None,
     for frame_idx in range(total_frames):
         img = _step_and_draw(balls, width, height)
         draw_caption_at(img, wrapped_lines, frame_idx / fps, font_path)
+        draw_hook_at(img, hook_text, frame_idx / fps, font_path)
         yield np.asarray(img)

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, List
 from PIL import Image
 from config import VIDEO_WIDTH, VIDEO_HEIGHT, FPS, MUSIC_DIR
-from caption import wrap_words, draw_caption_at
+from caption import wrap_words, draw_caption_at, draw_hook_at
 
 _FONT_CANDIDATES = [
     "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",  # macOS
@@ -44,10 +44,12 @@ def get_audio_duration(audio_path: Path) -> float:
     return float(json.loads(result.stdout)["format"]["duration"])
 
 
-def build_scene_clip(image_path: Path, audio_path: Path, word_timings: List[dict], out_path: Path):
+def build_scene_clip(image_path: Path, audio_path: Path, word_timings: List[dict], out_path: Path,
+                     hook_text: Optional[str] = None):
     """
     Tạo 1 clip: ảnh có hiệu ứng Ken Burns (zoom nhẹ) + giọng đọc + phụ đề burn-in, từ đang được đọc
-    tô nổi bật đồng bộ theo giọng đọc (`word_timings` từ tts.generate_voice).
+    tô nổi bật đồng bộ theo giọng đọc (`word_timings` từ tts.generate_voice). `hook_text`: chữ mở
+    đầu cỡ lớn hiện trong ~3 giây đầu clip (chỉ truyền cho cảnh đầu tiên, xem caption.draw_hook_at).
     """
     duration = get_audio_duration(audio_path)
     frames = max(int(duration * FPS), 1)
@@ -68,6 +70,7 @@ def build_scene_clip(image_path: Path, audio_path: Path, word_timings: List[dict
         for frame_idx in range(frames):
             img = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
             draw_caption_at(img, wrapped_lines, frame_idx / FPS, _FONT_PATH)
+            draw_hook_at(img, hook_text, frame_idx / FPS, _FONT_PATH)
             img.save(caption_dir / f"cap_{frame_idx:05d}.png")
 
         # Ken Burns: scale ảnh lớn hơn khung hình rồi zoompan để tạo chuyển động nhẹ, sau đó
@@ -96,7 +99,8 @@ def build_scene_clip(image_path: Path, audio_path: Path, word_timings: List[dict
     return out_path
 
 
-def build_scene_clip_physics(audio_path: Path, word_timings: List[dict], out_path: Path, seed: Optional[int] = None):
+def build_scene_clip_physics(audio_path: Path, word_timings: List[dict], out_path: Path, seed: Optional[int] = None,
+                             hook_text: Optional[str] = None):
     """
     Tạo 1 clip: nền mô phỏng vật lý (bóng nảy, tự sinh bằng code) + giọng đọc + phụ đề burn-in, từ
     đang được đọc tô nổi bật đồng bộ theo giọng đọc. Không dùng ảnh/footage có bản quyền — thay
@@ -126,7 +130,7 @@ def build_scene_clip_physics(audio_path: Path, word_timings: List[dict], out_pat
     try:
         for frame in frame_generator(
             VIDEO_WIDTH, VIDEO_HEIGHT, FPS, duration, seed=seed,
-            wrapped_lines=wrapped_lines, font_path=_FONT_PATH,
+            wrapped_lines=wrapped_lines, font_path=_FONT_PATH, hook_text=hook_text,
         ):
             proc.stdin.write(frame.tobytes())
     except BrokenPipeError:

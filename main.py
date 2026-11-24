@@ -14,15 +14,16 @@ Yêu cầu: đã cài dependencies (pip install -r requirements.txt),
 đã set biến môi trường GROQ_API_KEY và PEXELS_API_KEY (xem .env.example).
 """
 import argparse
+import csv
 import re
 import shutil
 import random
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 from config import (OUTPUT_DIR, MUSIC_DIR, NUM_IMAGES, VIDEO_STYLE, DEFAULT_LANG, DEFAULT_VOICES, TTS_VOICE,
-                    TTS_RATE, DEFAULT_NICHE, BRAND_HASHTAGS)
+                    TTS_RATE, DEFAULT_NICHE, BRAND_HASHTAGS, VIDEO_FORMAT)
 from niches import NICHES, get_niche
 from script_gen import generate_script, generate_topic
 from tts import generate_voice
@@ -54,6 +55,28 @@ def _resolve_brand_hashtags(niche_brand: list) -> list:
     return list(niche_brand)
 
 
+EXPERIMENT_LOG = Path(__file__).parent / "experiment_log.csv"
+
+
+def _resolve_format(fmt: str) -> str:
+    """'ab' -> luân phiên theo ngày (chẵn: hook, lẻ: classic) để A/B test câu mở đầu."""
+    if fmt == "ab":
+        return "hook" if date.today().toordinal() % 2 == 0 else "classic"
+    if fmt not in ("hook", "classic"):
+        raise ValueError(f"VIDEO_FORMAT không hợp lệ: {fmt!r} (hook | classic | ab)")
+    return fmt
+
+
+def _log_experiment(row: dict) -> None:
+    """Ghi 1 dòng vào experiment_log.csv (được workflow commit lại) để đối chiếu với TikTok Studio."""
+    new = not EXPERIMENT_LOG.exists()
+    with EXPERIMENT_LOG.open("a", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(row))
+        if new:
+            w.writeheader()
+        w.writerow(row)
+
+
 def run_pipeline(
     topic: Optional[str] = None,
     background: str = VIDEO_STYLE,
@@ -62,10 +85,13 @@ def run_pipeline(
     rate: str = TTS_RATE,
     post_to_tiktok: bool = True,
     niche: str = DEFAULT_NICHE,
+    video_format: str = VIDEO_FORMAT,
 ) -> Path:
     resolved_voice = voice or DEFAULT_VOICES.get(lang, TTS_VOICE)
     niche_obj = get_niche(niche)
     print(f"Niche: {niche_obj.key} — {niche_obj.label}")
+    fmt = _resolve_format(video_format)
+    print(f"Định dạng: {fmt}" + (" (A/B luân phiên theo ngày)" if video_format == "ab" else ""))
 
     if not topic:
         recent_topics = load_recent_topics()
@@ -81,11 +107,14 @@ def run_pipeline(
         f"[1/4] Đang tạo script cho chủ đề: {topic} (ngôn ngữ: {lang}, nền: {background}, "
         f"giọng: {resolved_voice}, tốc độ: {rate})"
     )
-    script = generate_script(topic, num_scenes=NUM_IMAGES, lang=lang, niche=niche_obj)
+    script = generate_script(topic, num_scenes=NUM_IMAGES, lang=lang, niche=niche_obj, fmt=fmt)
     title = script["title"]
     hashtags = _merge_brand_hashtags(script.get("hashtags", []), _resolve_brand_hashtags(niche_obj.brand_hashtags))
     scenes = script["scenes"]
+    hook_text = (script.get("hook_text") or "").strip().strip('"') if fmt == "hook" else ""
     print(f"  → Tiêu đề: {title} ({len(scenes)} cảnh)")
+    if hook_text:
+        print(f"  → Chữ mở đầu: {hook_text}")
 
     clip_paths = []
     for i, scene in enumerate(scenes):
@@ -98,12 +127,14 @@ def run_pipeline(
 
         if background == "physics":
             # Nền bóng nảy tự sinh bằng code — không cần ảnh, không dính bản quyền
-            build_scene_clip_physics(audio_path, word_timings, clip_path, seed=i)
+            build_scene_clip_physics(audio_path, word_timings, clip_path, seed=i,
+                                     hook_text=hook_text if i == 0 else None)
         else:
             image_query = scene["image_query"]
             image_path = work_dir / f"image_{i}.jpg"
             fetch_image(image_query, image_path)
-            build_scene_clip(image_path, audio_path, word_timings, clip_path)
+            build_scene_clip(image_path, audio_path, word_timings, clip_path,
+                             hook_text=hook_text if i == 0 else None)
 
         clip_paths.append(clip_path)
 
@@ -121,6 +152,16 @@ def run_pipeline(
     shutil.rmtree(work_dir, ignore_errors=True)
 
     print(f"[4/4] Hoàn tất: {final_path}")
+    try:
+        from video_builder import get_audio_duration
+        duration = round(get_audio_duration(final_path), 1)
+    except Exception:
+        duration = ""
+    _log_experiment({
+        "date": date.today().isoformat(), "format": fmt, "niche": niche_obj.key, "lang": lang,
+        "background": background, "duration_s": duration, "hook_text": hook_text, "title": title,
+    })
+    print(f"  → Thời lượng: {duration}s — đã ghi vào {EXPERIMENT_LOG.name}")
 
     tiktok_caption = f"{title}\n\n{' '.join(hashtags)}" if hashtags else title
     tiktok_posted = False
@@ -184,6 +225,11 @@ def _parse_args() -> argparse.Namespace:
              f"Mặc định: {DEFAULT_NICHE} (đổi qua biến môi trường CONTENT_NICHE). Xem niches.py",
     )
     parser.add_argument(
+        "--format", "-f", dest="video_format", choices=["hook", "classic", "ab"], default=VIDEO_FORMAT,
+        help=f"Định dạng video: hook (ngắn + chữ mở đầu), classic (như cũ), ab (luân phiên theo ngày). "
+             f"Mặc định: {VIDEO_FORMAT} (đổi qua biến môi trường VIDEO_FORMAT)",
+    )
+    parser.add_argument(
         "--no-tiktok", action="store_true",
         help="Bỏ qua đăng TikTok cho lần chạy này (vẫn lưu caption+hashtag ra file .txt cạnh video)",
     )
@@ -194,5 +240,5 @@ if __name__ == "__main__":
     args = _parse_args()
     run_pipeline(
         args.topic, background=args.background, voice=args.voice, lang=args.lang, rate=args.rate,
-        post_to_tiktok=not args.no_tiktok, niche=args.niche,
+        post_to_tiktok=not args.no_tiktok, niche=args.niche, video_format=args.video_format,
     )

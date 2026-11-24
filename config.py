@@ -57,6 +57,14 @@ DEFAULT_NICHE = os.getenv("CONTENT_NICHE", "").strip() or "circle"
 # Để trống = dùng brand_hashtags của niche (circle: #Happit). Đặt "none" để tắt hẳn.
 BRAND_HASHTAGS = os.getenv("BRAND_HASHTAGS", "").strip()
 
+# --- Định dạng video (thí nghiệm câu mở đầu) ---
+# "hook":    video ngắn 15-25s + chữ mở đầu cỡ lớn trên màn hình 3 giây đầu (đọc được cả khi tắt tiếng)
+# "classic": như cũ (không chữ mở đầu, độ dài bình thường)
+# "ab":      luân phiên theo ngày (ngày chẵn hook, ngày lẻ classic) để so sánh; mỗi video được ghi vào
+#            experiment_log.csv -> đối chiếu với số liệu TikTok Studio sau ~2 tuần.
+# Ghi đè bằng biến môi trường / repo variable VIDEO_FORMAT hoặc flag --format.
+VIDEO_FORMAT = os.getenv("VIDEO_FORMAT", "").strip().lower() or "ab"
+
 # --- LLM model (Groq free tier) ---
 GROQ_MODEL = "openai/gpt-oss-120b"
 
